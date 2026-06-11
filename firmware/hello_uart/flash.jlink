@@ -1,0 +1,10 @@
+si JTAG
+speed 4000
+device RISC-V
+connect
+halt
+loadbin build/neorv32_exe.bin 0x00000000
+verifybin build/neorv32_exe.bin 0x00000000
+r0
+go
+exit

@@ -1,0 +1,567 @@
+{
+  "design": {
+    "design_info": {
+      "boundary_crc": "0x6E3D74ED7D4DBCFA",
+      "device": "xc7a100tfgg484-2",
+      "gen_directory": "../../../../pt_tf_neorv32.gen/sources_1/bd/neorv_basic",
+      "name": "neorv_basic",
+      "rev_ctrl_bd_flag": "RevCtrlBdOff",
+      "synth_flow_mode": "Hierarchical",
+      "tool_version": "2025.2",
+      "validated": "true"
+    },
+    "design_tree": {
+      "neorv32_vivado_ip_0": "",
+      "clk_wiz_0": "",
+      "ilslice_0": "",
+      "ilslice_1": "",
+      "ilslice_2": "",
+      "clk_wiz_1": "",
+      "clk_gen_0": ""
+    },
+    "ports": {
+      "clk": {
+        "type": "clk",
+        "direction": "I",
+        "parameters": {
+          "ASSOCIATED_RESET": {
+            "value": "resetn",
+            "value_src": "default"
+          },
+          "CLK_DOMAIN": {
+            "value": "neorv_basic_clk_0",
+            "value_src": "default"
+          },
+          "FREQ_HZ": {
+            "value": "100000000",
+            "value_src": "default"
+          },
+          "FREQ_TOLERANCE_HZ": {
+            "value": "0",
+            "value_src": "default"
+          },
+          "INSERT_VIP": {
+            "value": "0",
+            "value_src": "default"
+          },
+          "PHASE": {
+            "value": "0.0",
+            "value_src": "default"
+          }
+        }
+      },
+      "jtag_tck_i": {
+        "direction": "I"
+      },
+      "jtag_tdi_i": {
+        "direction": "I"
+      },
+      "jtag_tms_i": {
+        "direction": "I"
+      },
+      "uart0_rxd_i": {
+        "direction": "I"
+      },
+      "jtag_tdo_o": {
+        "direction": "O"
+      },
+      "uart0_txd_o": {
+        "direction": "O"
+      },
+      "resetn": {
+        "type": "rst",
+        "direction": "I",
+        "parameters": {
+          "INSERT_VIP": {
+            "value": "0",
+            "value_src": "default"
+          },
+          "POLARITY": {
+            "value": "ACTIVE_LOW",
+            "value_src": "default"
+          }
+        }
+      },
+      "spi_dat_i_0": {
+        "direction": "I"
+      },
+      "twi_sda_i_0": {
+        "direction": "I"
+      },
+      "twi_scl_i_0": {
+        "direction": "I"
+      },
+      "spi_clk_o_0": {
+        "direction": "O"
+      },
+      "spi_dat_o_0": {
+        "direction": "O"
+      },
+      "twi_sda_o_0": {
+        "direction": "O"
+      },
+      "twi_scl_o_0": {
+        "direction": "O"
+      },
+      "pwm_o_0": {
+        "direction": "O",
+        "left": "0",
+        "right": "0"
+      },
+      "Dout_0": {
+        "direction": "O",
+        "left": "2",
+        "right": "0",
+        "parameters": {
+          "PortWidth": {
+            "value": "3",
+            "value_src": "user_prop"
+          }
+        }
+      },
+      "gpio_o_0": {
+        "direction": "O",
+        "left": "4",
+        "right": "0",
+        "parameters": {
+          "PortWidth": {
+            "value": "5",
+            "value_src": "user_prop"
+          }
+        }
+      },
+      "gpio_i_0": {
+        "direction": "I",
+        "left": "0",
+        "right": "0"
+      },
+      "SCLK_0": {
+        "direction": "O"
+      },
+      "LRCLK_0": {
+        "direction": "O"
+      }
+    },
+    "components": {
+      "neorv32_vivado_ip_0": {
+        "vlnv": "NEORV32:user:neorv32_vivado_ip:1.0",
+        "ip_revision": "1",
+        "xci_name": "neorv_basic_neorv32_vivado_ip_0_0",
+        "xci_path": "ip/neorv_basic_neorv32_vivado_ip_0_0/neorv_basic_neorv32_vivado_ip_0_0.xci",
+        "inst_hier_path": "neorv32_vivado_ip_0",
+        "has_run_ip_tcl": "true",
+        "parameters": {
+          "CLOCK_FREQUENCY": {
+            "value": "160000000"
+          },
+          "CPU_FAST_MUL_EN": {
+            "value": "true"
+          },
+          "CPU_FAST_SHIFT_EN": {
+            "value": "true"
+          },
+          "DMEM_EN": {
+            "value": "true"
+          },
+          "DMEM_SIZE": {
+            "value": "131072"
+          },
+          "IMEM_EN": {
+            "value": "true"
+          },
+          "IMEM_SIZE": {
+            "value": "131072"
+          },
+          "IO_GPIO_EN": {
+            "value": "true"
+          },
+          "IO_GPIO_OUT_NUM": {
+            "value": "6"
+          },
+          "IO_PWM_EN": {
+            "value": "true"
+          },
+          "IO_SPI_EN": {
+            "value": "true"
+          },
+          "IO_SPI_FIFO": {
+            "value": "256"
+          },
+          "IO_TWI_EN": {
+            "value": "true"
+          },
+          "IO_TWI_FIFO": {
+            "value": "8"
+          },
+          "IO_UART0_EN": {
+            "value": "true"
+          },
+          "OCD_EN": {
+            "value": "true"
+          },
+          "RISCV_ISA_C": {
+            "value": "false"
+          },
+          "RISCV_ISA_M": {
+            "value": "true"
+          },
+          "RISCV_ISA_Zaamo": {
+            "value": "false"
+          },
+          "RISCV_ISA_Zba": {
+            "value": "false"
+          },
+          "RISCV_ISA_Zicond": {
+            "value": "true"
+          }
+        }
+      },
+      "clk_wiz_0": {
+        "vlnv": "xilinx.com:ip:clk_wiz:6.0",
+        "ip_revision": "17",
+        "xci_name": "neorv_basic_clk_wiz_0_0",
+        "xci_path": "ip/neorv_basic_clk_wiz_0_0/neorv_basic_clk_wiz_0_0.xci",
+        "inst_hier_path": "clk_wiz_0",
+        "has_run_ip_tcl": "true",
+        "parameters": {
+          "CLKOUT1_JITTER": {
+            "value": "119.657"
+          },
+          "CLKOUT1_REQUESTED_OUT_FREQ": {
+            "value": "160"
+          },
+          "CLKOUT2_JITTER": {
+            "value": "130.958"
+          },
+          "CLKOUT2_PHASE_ERROR": {
+            "value": "98.575"
+          },
+          "CLKOUT2_USED": {
+            "value": "true"
+          },
+          "MMCM_CLKOUT0_DIVIDE_F": {
+            "value": "6.250"
+          },
+          "MMCM_CLKOUT1_DIVIDE": {
+            "value": "10"
+          },
+          "NUM_OUT_CLKS": {
+            "value": "2"
+          },
+          "RESET_PORT": {
+            "value": "resetn"
+          },
+          "RESET_TYPE": {
+            "value": "ACTIVE_LOW"
+          }
+        }
+      },
+      "ilslice_0": {
+        "vlnv": "xilinx.com:inline_hdl:ilslice:1.0",
+        "parameters": {
+          "DIN_FROM": {
+            "value": "2"
+          },
+          "DIN_WIDTH": {
+            "value": "8"
+          }
+        }
+      },
+      "ilslice_1": {
+        "vlnv": "xilinx.com:inline_hdl:ilslice:1.0",
+        "parameters": {
+          "DIN_FROM": {
+            "value": "5"
+          },
+          "DIN_TO": {
+            "value": "5"
+          },
+          "DIN_WIDTH": {
+            "value": "6"
+          }
+        }
+      },
+      "ilslice_2": {
+        "vlnv": "xilinx.com:inline_hdl:ilslice:1.0",
+        "parameters": {
+          "DIN_FROM": {
+            "value": "4"
+          },
+          "DIN_WIDTH": {
+            "value": "6"
+          }
+        }
+      },
+      "clk_wiz_1": {
+        "vlnv": "xilinx.com:ip:clk_wiz:6.0",
+        "ip_revision": "17",
+        "xci_name": "neorv_basic_clk_wiz_1_0",
+        "xci_path": "ip/neorv_basic_clk_wiz_1_0/neorv_basic_clk_wiz_1_0.xci",
+        "inst_hier_path": "clk_wiz_1",
+        "has_run_ip_tcl": "true",
+        "parameters": {
+          "CLKOUT1_JITTER": {
+            "value": "360.948"
+          },
+          "CLKOUT1_PHASE_ERROR": {
+            "value": "301.601"
+          },
+          "CLKOUT1_REQUESTED_OUT_FREQ": {
+            "value": "12.288"
+          },
+          "CLKOUT2_JITTER": {
+            "value": "130.958"
+          },
+          "CLKOUT2_PHASE_ERROR": {
+            "value": "98.575"
+          },
+          "CLKOUT2_USED": {
+            "value": "false"
+          },
+          "MMCM_CLKFBOUT_MULT_F": {
+            "value": "48.000"
+          },
+          "MMCM_CLKOUT0_DIVIDE_F": {
+            "value": "78.125"
+          },
+          "MMCM_CLKOUT1_DIVIDE": {
+            "value": "1"
+          },
+          "MMCM_DIVCLK_DIVIDE": {
+            "value": "5"
+          },
+          "NUM_OUT_CLKS": {
+            "value": "1"
+          },
+          "RESET_PORT": {
+            "value": "resetn"
+          },
+          "RESET_TYPE": {
+            "value": "ACTIVE_LOW"
+          }
+        }
+      },
+      "clk_gen_0": {
+        "vlnv": "xilinx.com:module_ref:clk_gen:1.0",
+        "ip_revision": "1",
+        "xci_name": "neorv_basic_clk_gen_0_0",
+        "xci_path": "ip/neorv_basic_clk_gen_0_0/neorv_basic_clk_gen_0_0.xci",
+        "inst_hier_path": "clk_gen_0",
+        "has_run_ip_tcl": "true",
+        "reference_info": {
+          "ref_type": "hdl",
+          "ref_name": "clk_gen",
+          "boundary_crc": "0x0"
+        },
+        "ports": {
+          "MCLK": {
+            "direction": "I",
+            "parameters": {
+              "FREQ_HZ": {
+                "value": "12288000",
+                "value_src": "ip_prop"
+              },
+              "PHASE": {
+                "value": "0.0",
+                "value_src": "ip_prop"
+              },
+              "CLK_DOMAIN": {
+                "value": "/clk_wiz_1_clk_out1",
+                "value_src": "ip_prop"
+              }
+            }
+          },
+          "go": {
+            "direction": "I"
+          },
+          "SCLK": {
+            "direction": "O"
+          },
+          "LRCLK": {
+            "direction": "O"
+          },
+          "WCLK": {
+            "direction": "O"
+          }
+        }
+      }
+    },
+    "nets": {
+      "Net": {
+        "ports": [
+          "neorv32_vivado_ip_0/gpio_o",
+          "ilslice_1/Din",
+          "ilslice_2/Din"
+        ]
+      },
+      "clk_1": {
+        "ports": [
+          "clk",
+          "clk_wiz_0/clk_in1"
+        ]
+      },
+      "clk_gen_0_LRCLK": {
+        "ports": [
+          "clk_gen_0/LRCLK",
+          "LRCLK_0"
+        ]
+      },
+      "clk_gen_0_SCLK": {
+        "ports": [
+          "clk_gen_0/SCLK",
+          "SCLK_0"
+        ]
+      },
+      "clk_wiz_0_clk_out1": {
+        "ports": [
+          "clk_wiz_0/clk_out1",
+          "neorv32_vivado_ip_0/clk"
+        ]
+      },
+      "clk_wiz_0_clk_out2": {
+        "ports": [
+          "clk_wiz_0/clk_out2",
+          "clk_wiz_1/clk_in1"
+        ]
+      },
+      "clk_wiz_0_locked": {
+        "ports": [
+          "clk_wiz_0/locked",
+          "neorv32_vivado_ip_0/resetn"
+        ]
+      },
+      "clk_wiz_1_clk_out1": {
+        "ports": [
+          "clk_wiz_1/clk_out1",
+          "clk_gen_0/MCLK"
+        ]
+      },
+      "clk_wiz_1_locked": {
+        "ports": [
+          "clk_wiz_1/locked",
+          "clk_gen_0/go"
+        ]
+      },
+      "gpio_i_0_1": {
+        "ports": [
+          "gpio_i_0",
+          "neorv32_vivado_ip_0/gpio_i"
+        ]
+      },
+      "ilslice_0_Dout": {
+        "ports": [
+          "ilslice_0/Dout",
+          "Dout_0"
+        ]
+      },
+      "ilslice_1_Dout": {
+        "ports": [
+          "ilslice_1/Dout",
+          "clk_wiz_1/resetn"
+        ]
+      },
+      "ilslice_2_Dout": {
+        "ports": [
+          "ilslice_2/Dout",
+          "gpio_o_0"
+        ]
+      },
+      "jtag_tck_i_0_1": {
+        "ports": [
+          "jtag_tck_i",
+          "neorv32_vivado_ip_0/jtag_tck_i"
+        ]
+      },
+      "jtag_tdi_i_0_1": {
+        "ports": [
+          "jtag_tdi_i",
+          "neorv32_vivado_ip_0/jtag_tdi_i"
+        ]
+      },
+      "jtag_tms_i_0_1": {
+        "ports": [
+          "jtag_tms_i",
+          "neorv32_vivado_ip_0/jtag_tms_i"
+        ]
+      },
+      "neorv32_vivado_ip_0_jtag_tdo_o": {
+        "ports": [
+          "neorv32_vivado_ip_0/jtag_tdo_o",
+          "jtag_tdo_o"
+        ]
+      },
+      "neorv32_vivado_ip_0_pwm_o": {
+        "ports": [
+          "neorv32_vivado_ip_0/pwm_o",
+          "pwm_o_0"
+        ]
+      },
+      "neorv32_vivado_ip_0_spi_clk_o": {
+        "ports": [
+          "neorv32_vivado_ip_0/spi_clk_o",
+          "spi_clk_o_0"
+        ]
+      },
+      "neorv32_vivado_ip_0_spi_csn_o": {
+        "ports": [
+          "neorv32_vivado_ip_0/spi_csn_o",
+          "ilslice_0/Din"
+        ]
+      },
+      "neorv32_vivado_ip_0_spi_dat_o": {
+        "ports": [
+          "neorv32_vivado_ip_0/spi_dat_o",
+          "spi_dat_o_0"
+        ]
+      },
+      "neorv32_vivado_ip_0_twi_scl_o": {
+        "ports": [
+          "neorv32_vivado_ip_0/twi_scl_o",
+          "twi_scl_o_0"
+        ]
+      },
+      "neorv32_vivado_ip_0_twi_sda_o": {
+        "ports": [
+          "neorv32_vivado_ip_0/twi_sda_o",
+          "twi_sda_o_0"
+        ]
+      },
+      "neorv32_vivado_ip_0_uart0_txd_o": {
+        "ports": [
+          "neorv32_vivado_ip_0/uart0_txd_o",
+          "uart0_txd_o"
+        ]
+      },
+      "resetn_1": {
+        "ports": [
+          "resetn",
+          "clk_wiz_0/resetn"
+        ]
+      },
+      "spi_dat_i_0_1": {
+        "ports": [
+          "spi_dat_i_0",
+          "neorv32_vivado_ip_0/spi_dat_i"
+        ]
+      },
+      "twi_scl_i_0_1": {
+        "ports": [
+          "twi_scl_i_0",
+          "neorv32_vivado_ip_0/twi_scl_i"
+        ]
+      },
+      "twi_sda_i_0_1": {
+        "ports": [
+          "twi_sda_i_0",
+          "neorv32_vivado_ip_0/twi_sda_i"
+        ]
+      },
+      "uart0_rxd_i_0_1": {
+        "ports": [
+          "uart0_rxd_i",
+          "neorv32_vivado_ip_0/uart0_rxd_i"
+        ]
+      }
+    }
+  }
+}

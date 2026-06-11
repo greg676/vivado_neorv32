@@ -1,0 +1,57 @@
+# Vivado generated files
+*.cache/
+*.hw/
+*.ioplanning/
+*.ip_user_files/
+*.runs/
+*.sim/
+*.gen/
+*.jou
+*.log
+*.str
+*.xpr
+*.xsa
+webtalk*.txt
+usage_statistics_webtalk.*
+vivado_pid*.str
+
+# Vivado IP temp
+*.srcs/*/bd/*/hdl/
+*.srcs/*/bd/*/sim/
+*.srcs/*/bd/*/synth/
+*.srcs/*/ip/*/sim/
+*.srcs/*/ip/*/synth/
+*.srcs/*/ipshared/
+
+# Xilinx IP temp files
+*_xil_defaultlib*
+xil_defaultlib/
+
+# Build artifacts
+*.bit
+*.bin
+*.mcs
+*.prm
+*.ltx
+*.dcp
+*.edf
+*.ngc
+
+# OS junk
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+
+# Editor
+.vscode/
+.idea/
+
+# Compiled firmware
+firmware/**/*.elf
+firmware/**/*.o
+firmware/**/*.d
+firmware/**/*.bin
+firmware/**/*.hex
+firmware/**/build/
