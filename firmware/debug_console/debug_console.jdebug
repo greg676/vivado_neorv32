@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Project>
+  <General>
+    <ProjectName>debug_console</ProjectName>
+    <ProjectPath>/home/greg-jack/Desktop/designs/ptv2/vivado_neorv32/firmware/debug_console/debug_console.jdebug</ProjectPath>
+  </General>
+  <Debug>
+    <Connect>
+      <TargetDevice>RISC-V</TargetDevice>
+      <TargetInterface>JTAG</TargetInterface>
+      <InterfaceSpeed>4000</InterfaceSpeed>
+      <JTAGConf>-1,-1</JTAGConf>
+      <SN>802001213</SN>
+    </Connect>
+    <Data>
+      <ElfFile>/home/greg-jack/Desktop/designs/ptv2/vivado_neorv32/firmware/debug_console/main.elf</ElfFile>
+      <CodeEntry>0x00000000</CodeEntry>
+      <LoadEntry>0x00000000</LoadEntry>
+      <Breakpoint>main</Breakpoint>
+    </Data>
+  </Debug>
+</Project>

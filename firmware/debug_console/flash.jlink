@@ -1,0 +1,6 @@
+r
+halt
+loadbin /home/greg-jack/Desktop/designs/ptv2/vivado_neorv32/firmware/debug_console/elf.bin 0x00000000
+wreg pc 0x00000000
+go
+exit

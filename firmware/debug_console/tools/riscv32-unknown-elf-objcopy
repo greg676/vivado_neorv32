@@ -1,0 +1,2 @@
+#!/bin/bash
+exec /home/greg-jack/Xilinx/2025.2/Vitis/gnu/riscv/lin/x86_64-oesdk-linux/usr/bin/riscv32-xilinx-elf/riscv32-xilinx-elf-objcopy "$@"

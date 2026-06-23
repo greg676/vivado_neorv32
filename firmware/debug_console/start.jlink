@@ -1,0 +1,10 @@
+connect
+device RISC-V
+if JTAG
+speed 4000
+JTAGConf -1,-1
+autoconnect 1
+halt
+loadbin /home/greg-jack/Desktop/designs/ptv2/vivado_neorv32/firmware/debug_console/elf.bin 0x00000000
+wreg pc 0x00000000
+go
