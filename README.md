@@ -1,176 +1,263 @@
-# Alchitry Platinum V2 — NeoRV32 Audio System
+# LOOM — Multitrack Audio Weaving on FPGA
 
-A RISC-V based audio development platform built on the Alchitry Platinum V2 FPGA board, featuring the [NeoRV32](https://github.com/stnolting/neorv32) soft-core processor, CS42448 multichannel audio codec, and DDR3 memory.
+**A unified AI-assisted hardware development system**
+
+This repository contains three interconnected projects that together form a complete audio development platform:
+
+1. **LOOM** — Multitrack recorder/dubber with software-defined DSP
+2. **Alchitry Platinum V2** — Hardware platform (FPGA + FT601 USB3.0)
+3. **ADS+MCP** — AI Design Studio with Model Context Protocol tooling
+
+---
 
 ## 🎯 What This Is
 
-This project is the **third generation** of an evolving audio system design:
-- **Gen 1:** Early prototypes (pre-GitHub)
-- **Gen 2:** Iteration and learning (pre-GitHub)  
-- **Gen 3:** This repository — organized, documented, and production-ready
+LOOM is a **standalone hardware multitrack recorder and live source-separation engine** for musicians, built on a single FPGA. No computer. No DAW. You plug in mics and speakers, interact via touchscreen, and the FPGA fabric does real-time multitrack recording, mixing, effects, and — the signature feature — decodes individual instruments out of a stereo room mic onto separate tracks.
 
-The goal is a self-contained audio development platform with:
-- **NeoRV32** RISC-V soft-core @ 100 MHz
-- **CS42448** 8-channel audio codec (TDM/I²S)
-- **DDR3** 256MB memory via Xilinx MIG
-- **Debug console** over UART (v29+)
-- **MCP tool integration** for AI-assisted development
+### The Three Pillars
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    LOOM SYSTEM                                  │
+├───────────────┬───────────────────┬───────────────────────────┤
+│               │                   │                           │
+│  LOOM         │  Alchitry Pt V2   │  ADS+MCP                  │
+│  Application  │  Hardware Platform│  AI Infrastructure        │
+│               │                   │                           │
+│  • Multitrack │  • XC7A100T      │  • Open WebUI             │
+│    recording  │    FPGA          │  • MCP servers            │
+│  • Real-time  │  • CS42448       │  • Hardware debug tools    │
+│    DSP        │    8ch codec     │  • GitHub integration      │
+│  • Source     │  • DDR3 256MB    │                           │
+│    separation │  • FT601 USB3.0  │                           │
+│  • Touch UI   │  • NeoRV32 RISC-V│                           │
+│               │                   │                           │
+└───────────────┴───────────────────┴───────────────────────────┘
+```
+
+---
 
 ## 📁 Repository Structure
 
 ```
-vivado_neorv32/
-├── README.md              # This file
-├── LICENSE                # Project license
-├── docs/                  # Documentation
-│   ├── HARDWARE-DEBUG-RULES.md    # Critical do/don't list
-│   ├── PINOUT.md                   # Pin assignments
-│   └── MCP-INTEGRATION.md          # AI tool integration
-├── firmware/              # NeoRV32 firmware
-│   ├── debug_console/     # Interactive debug shell (v29)
-│   └── rp2040_uart_passthrough/   # USB UART bridge
-├── rtl/                   # Verilog/SystemVerilog sources
-│   ├── neorv_basic_plus_top.v    # Top-level design
-│   └── ...
-├── vivado/                # Vivado project files
-│   ├── neorv_basic_plus_top.xpr  # Project
-│   └── constraints/
-├── agent-workspace/       # Synced from codecbot AI sessions
-│   └── ...
-└── scripts/               # Automation
-    ├── save-to-github.sh           # Formal commit workflow
-    ├── flash-firmware.sh           # J-Link programming
-    └── test-uart.py                # UART communication test
+loom/
+├── README.md                          # This file
+├── LICENSE                            # Project license
+├── PROJECT-STATUS.md                  # Current build state
+│
+├── applications/
+│   └── loom/                          # The multitrack application
+│       ├── docs/
+│       │   ├── LOOM_by_opus48.md     # Master architecture doc
+│       │   ├── 00-VISION.md          # Product vision
+│       │   ├── 01-PRODUCT-SPEC.md    # Specifications
+│       │   ├── 02-SYSTEM-ARCH.md     # System architecture
+│       │   ├── 03-FPGA-AUDIO.md      # Audio fabric design
+│       │   ├── 04-DSP-LIBRARY.md     # DSP modules
+│       │   ├── 05-SEPARATOR.md      # Instrument separation
+│       │   ├── 06-CONTROL.md         # Control plane
+│       │   ├── 07-GUI-DISPLAY.md     # Touchscreen UI
+│       │   ├── 08-STORAGE.md         # Recording/storage
+│       │   ├── 09-RESOURCES.md       # Resource budget
+│       │   ├── 10-STRUCTURE.md       # Project structure
+│       │   └── 11-BUILD-PLAN.md      # Implementation plan
+│       ├── expanded/                  # AI-expanded design docs
+│       ├── rtl/                       # LOOM-specific Verilog
+│       └── firmware/                  # LOOM firmware (neorv32)
+│
+├── platforms/
+│   └── alchitry-platinum-v2/          # Hardware platform
+│       ├── rtl/                       # NeoRV32 + peripherals
+│       ├── constraints/               # XDC pin definitions
+│       ├── firmware/                  # Boot firmware
+│       │   ├── debug_console/         # Interactive debug shell
+│       │   └── rp2040_passthrough/    # USB UART bridge
+│       ├── doc/                       # Hardware docs
+│       │   ├── HARDWARE-DEBUG-RULES.md
+│       │   ├── PINOUT.md
+│       │   └── MCP-INTEGRATION.md
+│       ├── bd/                        # Vivado block designs
+│       ├── neorv32_core/              # NeoRV32 RTL
+│       ├── tcl/                       # Build scripts
+│       └── scripts/                   # Automation
+│           ├── save-to-github.sh      # Formal commit workflow
+│           ├── flash-firmware.sh      # J-Link programming
+│           └── test-uart.py          # UART test
+│
+├── infrastructure/
+│   └── ads-mcp/                       # AI tooling
+│       ├── docs/
+│       │   └── ADS+MCP_by_opus48.md   # Master architecture
+│       ├── mcp-servers/               # MCP tool implementations
+│       │   ├── hardware-debug/        # UART/JTAG debug tools
+│       │   ├── r7-filesystem/         # File access
+│       │   ├── github-project/        # Git integration
+│       │   └── browser-puppeteer/     # Web automation
+│       └── profiles/                  # Project profiles
+│           └── project.profile.json   # Active configuration
+│
+└── codebot-workspace/                 # Synced AI sessions
+    └── ...                            # From codecbot agent
 ```
+
+---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- **Alchitry Platinum V2** board with FT2232H USB-UART
-- **SEGGER J-Link** or compatible RISC-V debugger
-- **Xilinx Vivado** 2023.2+ (for FPGA bitstream)
-- **RISC-V GCC** toolchain (for firmware)
+- **Alchitry Platinum V2** with FT601 add-on board
+- **SEGGER J-Link** for RISC-V debugging
+- **Xilinx Vivado** 2023.2+ for FPGA synthesis
+- **RISC-V GCC** toolchain
 - **Python 3.12+** with pyserial
 
-### 1. Flash the Firmware
+### 1. Connect Hardware
+
+The Alchitry Pt V2 exposes:
+- **FT2232H** → `/dev/ttyUSB0` @ 19200 baud (NeoRV32 console)
+- **FT601 USB3.0** → High-speed data (future: audio streaming)
+- **J-Link** → RISC-V debug and firmware loading
+
+### 2. Flash Boot Firmware
 
 ```bash
-cd firmware/debug_console
+cd platforms/alchitry-platinum-v2/firmware/debug_console
 make clean && make exe
 ../../scripts/flash-firmware.sh
 ```
 
-### 2. Connect UART
-
-The board exposes two interfaces via FT2232:
-- `/dev/ttyUSB0` — **Primary** (FTDI Channel A, 19200 baud)
-- `/dev/ttyACM0` — **Passthrough** (merged with RP2040)
+### 3. Connect Debug Console
 
 ```bash
 screen /dev/ttyUSB0 19200
 # or
-python3 scripts/test-uart.py
+python3 platforms/alchitry-platinum-v2/scripts/test-uart.py
 ```
 
-### 3. Interactive Debug Console
-
-Once connected, the NeoRV32 firmware provides an interactive shell:
+### 4. Interactive Commands
 
 ```
-sys                  — System info (clock, memory sizes)
-i2c probe            — Scan I²C bus (finds CS42448 @ 0x4A)
-i2c r8 A R           — Read 8-bit register
-codec init           — Initialize CS42448 for TDM
-clk on|off           — Enable/disable MCLK (GPIO bit 6)
-gpio dump            — Show all GPIO states
-spi diag             — SPI diagnostic
+sys                  — System info (100 MHz, 128KB IMEM/DMEM)
+i2c probe            — Scan I²C (CS42448 @ 0x4A)
+codec init           — Initialize codec for TDM
+clk on|off           — Enable 12.288 MHz MCLK
+gpio dump            — Show GPIO states
 help                 — Full command list
 ```
 
+---
+
 ## 🔧 Hardware Architecture
+
+### Alchitry Platinum V2 + FT601 Add-on
+
+| Component | Specification | Notes |
+|-----------|---------------|-------|
+| FPGA | Xilinx XC7A100T | Artix-7, 100T package |
+| Logic Cells | 101,440 | ~15% for LOOM v1 |
+| BRAM | 4.86 Mb | Audio buffers, coefficient tables |
+| DSP48 | 240 | Time-multiplexed for all channels |
+| DDR3 | 256 MB | MIG controller @ 100 MHz |
+| Codec | CS42448 | 8ch TDM, I²C control |
+| USB 3.0 | FT601 | Future: audio streaming to host |
+| Display | 2.4" SPI TFT | 320×240, touch + stylus |
+| MCU | NeoRV32 RISC-V | Soft-core @ 100 MHz |
 
 ### Clock Tree
 
-| Clock | Frequency | Source |
-|-------|-----------|--------|
-| CPU (ui_clk) | 100 MHz | MIG DDR3 controller |
-| MCLK | 12.288 MHz | clk_wiz_1 MMCM |
-| SCLK/LRCLK | Derived | TDM bit clock from MCLK |
+| Clock | Frequency | Source | Purpose |
+|-------|-----------|--------|---------|
+| CPU | 100 MHz | MIG ui_clk | NeoRV32, control plane |
+| MCLK | 12.288 MHz | MMCM | Codec master clock |
+| SCLK | 3.072 MHz | Derived | TDM bit clock (48k × 64) |
+| LRCLK | 48 kHz | Derived | TDM frame sync |
 
-### Pin Map (NeoRV32 basic_plus_top)
+---
 
-| Signal | FPGA Pin | Direction | Function |
-|--------|----------|-----------|----------|
-| UART RX | AA20 | IN | FTDI → NeoRV32 |
-| UART TX | AA21 | OUT | NeoRV32 → FTDI |
-| I²C SCL | B21 | Bidir | CS42448 clock |
-| I²C SDA | E21 | Bidir | CS42448 data |
-| GPIO[0] | G2 | OUT | LED (active HIGH) |
-| GPIO[1] | E13 | OUT | Codec A0 (address LSB) |
-| GPIO[2] | E14 | OUT | Codec A1 (address MSB) |
-| GPIO[3] | D14 | OUT | Codec RSTCN (active HIGH) |
-| GPIO[6] | — | OUT | CLK_EN (clock enable) |
+## 🤖 AI Integration (ADS+MCP)
 
-### Memory Map
+The **AI Design Studio** enables natural-language hardware debugging through **Model Context Protocol** tools:
 
-| Region | Address | Size | Notes |
-|--------|---------|------|-------|
-| Boot ROM | 0x00000000 | 128 KB | Shadowed IMEM at boot |
-| IMEM (RAM) | 0x80000000 | 128 KB | Instruction memory |
-| DMEM (RAM) | 0x80020000 | 128 KB | Data memory |
-| DDR3 | 0x20000000 | 256 MB | External DRAM via MIG |
-| GPIO | 0xFFFC0000 | — | PORT_IN @ 0x00, PORT_OUT @ 0x04 |
+### MCP Servers
 
-## 🤖 AI Integration (MCP Tools)
+| Server | Tools | Purpose |
+|--------|-------|---------|
+| **hardware-debug** | `hw.i2c_scan`, `hw.codec_dump`, `hw.uart_terminal` | Direct hardware access |
+| **r7-filesystem** | `fs.read`, `fs.write`, `fs.tree` | File operations |
+| **github-project** | `gh.issues`, `gh.prs`, `gh.commit` | Git integration |
+| **browser-puppeteer** | `browser.screenshot`, `browser.navigate` | Web automation |
 
-This project is designed to work with AI assistants via the **Model Context Protocol (MCP)**:
+### Safety Architecture
 
-- **MCP Server**: `hardware-debug-mcp` running on host
-- **Tools**: `hw.i2c_scan`, `hw.codec_dump_registers`, `hw.uart_terminal`, etc.
-- **Safety**: Tiered access (SAFE → DEBUG → DANGEROUS modes)
-- **Audit**: All actions logged to `audit-log.ndjson`
+```
+Tier 0 (SAFE)      → Read-only, always allowed
+Tier 1 (DEBUG)     → Writes require DEBUG_MODE unlock + confirmation
+Tier 2 (DANGEROUS) → Flash writes, requires explicit DANGEROUS_MODE
+```
 
-See `docs/MCP-INTEGRATION.md` for setup.
+### Example Session
+
+```
+User: "Check if the codec is responding"
+AI:   hw.i2c_scan() → Finds CS42448 at 0x4A
+      hw.codec_dump_registers() → Reads all registers
+      
+User: "Initialize it for TDM mode"
+AI:   hw.enable_debug_mode() → Confirms with user
+      hw.codec_apply_known_good() → Applies validated config
+```
+
+---
 
 ## 📝 Development Workflow
 
-### AI Agent Sessions (codecbot)
+### AI Agent Sessions
 
 Development happens in `~/.openclaw-codecbot/workspaces/codecbot/`, then formally committed:
 
 ```bash
-# After a productive session:
-./scripts/save-to-github.sh "feat: implemented TDM clock validation"
+# After productive session:
+./platforms/alchitry-platinum-v2/scripts/save-to-github.sh \
+    "feat: implemented TDM clock validation"
 
 # This:
-# 1. Syncs agent workspace → agent-workspace/
+# 1. Syncs agent workspace → codebot-workspace/
 # 2. Stages all changes
 # 3. Shows diff stats
-# 4. Commits with your message
+# 4. Commits with message
 # 5. Pushes to GitHub
 ```
 
-### Git Commit Discipline
+### Commit Discipline
 
-- **Main branch** is always deployable
-- **Commit messages** follow conventional commits (`feat:`, `fix:`, `docs:`)
-- **Diff is the review** — check `git diff --cached` before commit
-- **History is sacred** — never force-push main
+- **Main branch** always deployable
+- **Conventional commits**: `feat:`, `fix:`, `docs:`, `refactor:`
+- **Diff is review**: Check `git diff --cached` before commit
+- **History immutable**: Never force-push
 
-## 📜 Version History
+---
 
-| Version | Date | Notes |
-|---------|------|-------|
-| v29 | 2026-06-19 | Current — Full debug console with codec init |
-| v28 | 2026-06-18 | Added SPI display commands |
-| ... | ... | See git log |
+## 📜 Project Status
 
-## 🔗 Related Projects
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Hardware Platform | ✅ Working | NeoRV32 v29, codec responding |
+| Debug Console | ✅ Working | UART, I²C, GPIO commands |
+| MCP Tools | ⚠️ Partial | Server running, needs parameter fix |
+| LOOM Application | 🚧 Design | Architecture complete, RTL pending |
+| FT601 Integration | 📋 Planned | USB3.0 audio streaming |
+| DSP Engine | 📋 Planned | Time-multiplexed MAC |
 
-- [NeoRV32](https://github.com/stnolting/neorv32) — The RISC-V core
-- [Alchitry](https://alchitry.com/) — FPGA boards and tutorials
-- CS42448 datasheet — Cirrus Logic multichannel codec
+---
+
+## 🔗 Documentation
+
+- **LOOM Architecture**: `applications/loom/docs/LOOM_by_opus48.md`
+- **ADS+MCP**: `infrastructure/ads-mcp/docs/ADS+MCP_by_opus48.md`
+- **Hardware Debug**: `platforms/alchitry-platinum-v2/doc/HARDWARE-DEBUG-RULES.md`
+
+---
 
 ## 📄 License
 
@@ -179,3 +266,4 @@ MIT License — See LICENSE file for details.
 ---
 
 *Built with coffee, J-Link, and an unreasonable amount of UART debugging.*
+*Woven on FPGA fabric by AI and human collaboration.*

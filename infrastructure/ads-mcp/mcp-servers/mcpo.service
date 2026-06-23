@@ -1,0 +1,13 @@
+[Unit]
+Description=mcpo MCP bridge for OWUI
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/mcpo --config /mnt/data-1tb/ai-design-studio/mcp-servers/mcpo-config.json --port 8200
+Restart=on-failure
+RestartSec=5
+Environment=ADS_PROFILE=/mnt/data-1tb/ai-design-studio/project.profile.json
+
+[Install]
+WantedBy=default.target

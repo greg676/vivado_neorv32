@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "r7-filesystem": {
+      "command": "/mnt/data-1tb/ai-design-studio/mcp-servers/run-filesystem-mcp.sh"
+    },
+    "github-project": {
+      "command": "/mnt/data-1tb/ai-design-studio/mcp-servers/run-github-mcp.sh"
+    },
+    "browser-puppeteer": {
+      "command": "/mnt/data-1tb/ai-design-studio/mcp-servers/run-browser-mcp.sh"
+    },
+    "hardware-debug": {
+      "command": "/mnt/data-1tb/ai-design-studio/mcp-servers/run-hardware-mcp.sh"
+    }
+  }
+}

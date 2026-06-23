@@ -1,0 +1,78 @@
+{
+  "profile_version": "1",
+  "project": {
+    "name": "alchitry-platinum-v2",
+    "version": "0.1.0",
+    "session_dir": "/mnt/data-1tb/ai-design-studio/debug-sessions/",
+    "workspace_dir": "/mnt/data-1tb/ai-design-studio/workspace/"
+  },
+  "filesystem": {
+    "read_roots": [
+      "~/projects/",
+      "/mnt/data-1tb/ai-design-studio/",
+      "~/.openclaw-godbot/workspace/",
+      "~/.openclaw-codecbot/workspaces/codecbot/",
+      "~/Desktop/designs/",
+      "~/Downloads/"
+    ],
+    "write_roots": [
+      "~/projects/alchitry-platinum-v2/",
+      "/mnt/data-1tb/ai-design-studio/workspace/",
+      "/mnt/data-1tb/ai-design-studio/debug-sessions/"
+    ],
+    "trash_dir": "/mnt/data-1tb/ai-design-studio/.trash"
+  },
+  "github": {
+    "username": "yourname",
+    "repos": [
+      "yourorg/alchitry-platinum-v2",
+      "openclaw/openclaw"
+    ],
+    "default_branch": "main",
+    "read_only_by_default": true
+  },
+  "hardware": {
+    "board": "Alchitry-Platinum-V2",
+    "board_serial": "UNKNOWN_POPULATE_LATER",
+    "probe": {
+      "type": "SEGGER-JLink",
+      "serial": "UNKNOWN_POPULATE_LATER",
+      "interface": "JTAG",
+      "target_device": "unknown"
+    },
+    "uart": {
+      "port": "/dev/ttyUSB0",
+      "baud": 115200
+    },
+    "i2c_bus": 0,
+    "spi_devices": {
+      "flash": {"cs_pin": "IO1", "device_name": "MX25L6406E"},
+      "display": {"cs_pin": "IO2", "device_name": "ILI9341"}
+    },
+    "ft601q": {
+      "mode": "high-speed-fifo",
+      "pipe_target": "/dev/video0"
+    },
+    "rtt_enabled": true
+  },
+  "known_good": {
+    "firmware_hash": "UNKNOWN_POPULATE_LATER",
+    "bitstream_hash": "UNKNOWN_POPULATE_LATER",
+    "codec_register_profile": "profiles/codec-cs42448-known-good.json",
+    "flash_spi_profile": "profiles/flash-mx25l6406e-known-good.json"
+  },
+  "browser": {
+    "screenshot_dir": "/mnt/data-1tb/ai-design-studio/browser-captures/",
+    "url_allowlist": [
+      "http://127.0.0.1:*",
+      "http://localhost:*",
+      "http://10.0.0.*",
+      "http://192.168.*",
+      "*.ts.net",
+      "github.com",
+      "docs.amd.com",
+      "docs.xilinx.com"
+    ]
+  },
+  "audit_log": "/mnt/data-1tb/ai-design-studio/audit/audit.jsonl"
+}
