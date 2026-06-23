@@ -1,7 +1,28 @@
 # Hardware Debugging — Do/Do-Not List
 
 > **RULE:** Before any hardware action, scan this list. If you're about to do something on the DO NOT side, stop and reconsider.
-> Last updated: 2026-06-19 11:08 PDT (v30 — added I²C pins, UART pins, clock info)
+> Last updated: 2026-06-22 20:00 PDT (v31 — CORRECTED UART port to /dev/ttyUSB1)
+
+---
+
+## 🔥 QUICK REFERENCE — Session Startup
+
+### Which UART port?
+```bash
+# AFTER loading firmware via J-Link, use:
+/dev/ttyUSB1  # FTDI channel B = UART on basic_plus_top
+
+# NOT these:
+/dev/ttyUSB0  # FTDI channel A (sometimes JTAG)
+/dev/ttyACM0  # RP2040 passthrough (old basic_top only)
+```
+
+### One-liner test:
+```bash
+stty -F /dev/ttyUSB1 19200 raw min 0 time 1 && echo "sys" > /dev/ttyUSB1 && timeout 2 cat /dev/ttyUSB1
+```
+
+Expected: `clk:100000000 IMEM:131072 DMEM:131072` and `>` prompt
 
 ---
 
@@ -27,14 +48,15 @@ JLinkExe -device RISC-V -if JTAG -speed 1000 -autoconnect 1 \
 #   go
 #   exit
 
-# 3. Open terminal at 19200 baud on /dev/ttyUSB0
+# 3. Open terminal at 19200 baud on /dev/ttyUSB1
+#    (NOT /dev/ttyUSB0 — that's sometimes JTAG, NOT /dev/ttyACM0 — that's RP2040 on old basic_top)
 #    Use Python serial — ONE connection, keep it open, send commands
 ```
 
 ### UART Communication (Python serial — keep connection open)
 ```python
 import serial, time
-ser = serial.Serial('/dev/ttyUSB0', 19200, timeout=2)
+ser = serial.Serial('/dev/ttyUSB1', 19200, timeout=2)  # FTDI channel B is UART
 ser.reset_input_buffer()
 time.sleep(0.5)  # let firmware boot
 ser.write(b'command\r')
