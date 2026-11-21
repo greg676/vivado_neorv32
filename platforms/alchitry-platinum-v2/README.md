@@ -110,8 +110,20 @@ Full details: [Wiki → Gotchas](../../wiki/Gotchas)
 | **[PicoDualProbe](https://github.com/greg676/PicoDualProbe)** | $5 dual SWD/JTAG debug probe |
 | **[NeoRV32 MCP Server](https://github.com/greg676/neorv32-mcp)** | AI agent bridge — 15 tools for hardware control |
 
+## FT601 USB3 loopback (separate top)
+
+USB 3 bring-up uses a dedicated top so NeoRV32 is not wired into the FT601 yet.
+
+```bash
+cd platforms/alchitry-platinum-v2
+vivado -mode batch -source tcl/rebuild_ft601_loopback.tcl
+make -C host/ft601-loopback selftest
+```
+
+Pinout defaults to first-batch `PT_ALPHA` (matches this repo's existing FT601 notes). Production Pt V2: `set ft601_pinout "v2"` before sourcing the TCL. Host tool + SDK notes: `host/ft601-loopback/README.md`.
+
 ## Status
 
-**Active.** Bitstream v0.29, firmware debug-console rev0. MCP server v3 tested against live hardware.
+**Active.** Bitstream v0.29, firmware debug-console rev0. MCP server v3 tested against live hardware. FT601 loopback sources are in-tree; Vivado synthesis of that top is not run in CI.
 
 MIT License
