@@ -48,10 +48,12 @@ Thumbs.db
 .vscode/
 .idea/
 
-# FT601 loopback local builds
+# FT601 loopback / capture local builds
 *.vvp
 platforms/alchitry-platinum-v2/host/ft601-loopback/ft601_loopback
 platforms/alchitry-platinum-v2/host/ft601-loopback/ft601_loopback_selftest
+platforms/alchitry-platinum-v2/host/ft601-capture/ft601_capture
+platforms/alchitry-platinum-v2/host/ft601-capture/ft601_capture_selftest
 
 # Compiled firmware
 firmware/**/*.elf
