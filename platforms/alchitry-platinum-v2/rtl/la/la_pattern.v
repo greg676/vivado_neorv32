@@ -10,6 +10,8 @@ module la_pattern #(
 ) (
     input  wire       clk,
     input  wire       rst,
+    input  wire       enable,
+    input  wire       soft_rst,
     input  wire [1:0] source,
     output wire [7:0] s0,
     output wire [7:0] s1
@@ -28,9 +30,9 @@ module la_pattern #(
     assign s1 = (source == 2'd1) ? walk1 : ctr1;
 
     always @(posedge clk) begin
-        if (rst)
+        if (rst || soft_rst)
             count <= 8'd0;
-        else
+        else if (enable)
             count <= count + STEP[7:0];
     end
 

@@ -1,5 +1,5 @@
-# FT601 LA capture dump.
-#   make            - packer self-test (no SDK)
+# FT601 LA triggered capture dump.
+#   make            - packer + LAT3 header self-test (no SDK)
 #   make d3xx       - hardware binary against FTDI D3XX
 #
 # Point D3XX_DIR at the unpacked linux SDK (contains ftd3xx.h and libftd3xx.so).

@@ -24,5 +24,6 @@ set_property PACKAGE_PIN B17 [get_ports {la_in[7]}]
 set_property IOSTANDARD LVCMOS33 [get_ports {la_in[*]}]
 
 # Live pins are asynchronous to ft_clk. The IOB FF / IDDR is the sample
-# element; do not time them as a synchronous bus.
+# element; do not time them as a synchronous bus. Edge trigger, circular
+# BRAM pre-trigger, and dump FSM all sit in the ft_clk fabric (no extra pins).
 set_false_path -from [get_ports {la_in[*]}]
