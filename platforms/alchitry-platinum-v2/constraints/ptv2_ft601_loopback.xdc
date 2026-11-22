@@ -46,11 +46,18 @@ set_clock_groups -asynchronous \
     -group [get_clocks -include_generated_clocks ft_clk]
 
 # ── I/O timing vs ft_clk (FT601 245 sync FIFO, 100 MHz) ─────────
-# Conservative pad delays; IOB FFs are required in the RTL.
-set_input_delay  -clock [get_clocks ft_clk] -max 7.000 [get_ports {ft_data[*] ft_be[*] ft_rxf ft_txe}]
-set_input_delay  -clock [get_clocks ft_clk] -min 1.000 [get_ports {ft_data[*] ft_be[*] ft_rxf ft_txe}]
-set_output_delay -clock [get_clocks ft_clk] -max 2.000 [get_ports {ft_oe ft_rd ft_wr ft_data[*] ft_be[*]}]
-set_output_delay -clock [get_clocks ft_clk] -min 0.000 [get_ports {ft_oe ft_rd ft_wr ft_data[*] ft_be[*]}]
+# DS_FT600Q-FT601Q AC tables + ~0.4 ns Ft+ connector:
+#   tCO max 7.0 ns, tCO min 1.0 ns  (FT601 driving DATA/BE/RXF#/TXE#)
+#   tSU     1.0 ns, tH     0.5 ns   (FT601 sampling OE#/RD#/WR#/DATA/BE)
+# Previous −0.555 ns WNS was live-pad RXF into a LUT (now IOB-registered)
+# plus a 2.0 ns output delay on the OBUFT T pin (now 1.4 ns + T false path).
+set_input_delay  -clock [get_clocks ft_clk] -max 7.400 [get_ports {ft_data[*] ft_be[*] ft_rxf ft_txe}]
+set_input_delay  -clock [get_clocks ft_clk] -min 0.600 [get_ports {ft_data[*] ft_be[*] ft_rxf ft_txe}]
+set_output_delay -clock [get_clocks ft_clk] -max 1.400 [get_ports {ft_oe ft_rd ft_wr ft_data[*] ft_be[*]}]
+set_output_delay -clock [get_clocks ft_clk] -min -0.100 [get_ports {ft_oe ft_rd ft_wr ft_data[*] ft_be[*]}]
+
+set_property SLEW FAST [get_ports {ft_oe ft_rd ft_wr ft_data[*] ft_be[*]}]
+set_property DRIVE 8 [get_ports {ft_oe ft_rd ft_wr ft_data[*] ft_be[*]}]
 
 # Reset/wakeup are DC from the board-clock sequencer.
 set_false_path -to [get_ports ft_reset]

@@ -7,9 +7,10 @@ post-trigger count, then a USB dump that includes the trigger position.
 
 This is a **separate bitstream** from NeoRV32 and from the FT601 loopback top.
 Loopback ([host/ft601-loopback](../ft601-loopback/)) stays the USB proof.
-Do not plug hardware until this design is in a PR and you have a local Vivado bitstream.
 
 No DDR3 MIG, no 4-channel ISERDES, no libsigrok.
+
+**Preferred USB backend is libusb-1.0.** D3XX is optional (`FTD3XX_LIB=/opt/ftdi/d3xx/libftd3xx.so`).
 
 ## Packing
 
@@ -57,7 +58,7 @@ From `platforms/alchitry-platinum-v2`:
 
 ```bash
 vivado -mode batch -source tcl/rebuild_la_capture.tcl
-# then in Vivado: Generate Bitstream
+# GUI: File → Open Project → vivado_project_la_capture/la_capture.xpr
 ```
 
 Defaults:
@@ -82,6 +83,13 @@ set la_trig_edge 0
 source tcl/rebuild_la_capture.tcl
 ```
 
+**Program RAM, not flash:**
+
+```bash
+vivado -mode batch -source tcl/program_ram.tcl -tclargs \
+  bitstreams/la_capture_top_pt_alpha.bit
+```
+
 Live inputs (FPGA bank 16, `IOSTANDARD LVCMOS33` only):
 
 | ch | Br | FPGA |
@@ -97,23 +105,20 @@ The DDR3 stub is still a **parallel tap** (word counter only). Pre-trigger is BR
 
 ## Host dump
 
-Pattern + header checker (no SDK, no board):
-
 ```bash
 make selftest
 python3 ft601_capture.py --self-test
-```
 
-Hardware (SDK installed — same D3XX notes as the loopback tool):
-
-```bash
-make d3xx D3XX_DIR=/opt/ftdi/d3xx
+make hw
 ./ft601_capture --source 0 --channel 0 --edge rise --post 2048 --dump capture.bin
 
-# or
-export FTD3XX_LIB=/opt/ftdi/d3xx/libftd3xx.so
 python3 ft601_capture.py --source 0 --edge rise --post 2048 --dump capture.bin --pattern counter
+# optional D3XX (library only on this bench):
+export FTD3XX_LIB=/opt/ftdi/d3xx/libftd3xx.so
+python3 ft601_capture.py --backend d3xx --source 0 --edge rise --post 2048
 ```
+
+Same D3XX notes as the loopback tool: OpenClaw left `/opt/ftdi/d3xx/libftd3xx.so`; `ftd3xx.h` is not installed, so `make d3xx` needs a full SDK unpack into `/opt/ftdi/d3xx`.
 
 | Flag | Meaning |
 |---|---|
@@ -124,6 +129,7 @@ python3 ft601_capture.py --source 0 --edge rise --post 2048 --dump capture.bin -
 | `--stop` | Dump an armed capture without waiting for the edge |
 | `--dump FILE` | Raw packed payload (header is printed, not stored) |
 | `--pattern counter\|walking\|none` | Verify on-FPGA pattern |
+| `--backend auto\|libusb\|d3xx` | Python only |
 | `--self-test` | No hardware |
 
 The tool writes START, reads the 32-byte header, then reads `ceil(NSAMPLES/4)` payload words. Exit `0` is PASS.

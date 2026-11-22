@@ -1,14 +1,16 @@
 /*
- * FT601 32-bit loopback / TX-counter host tool (FTDI D3XX).
+ * FT601 32-bit loopback / TX-counter host tool.
  *
  * Default: send an incrementing 32-bit counter, read it back, fail closed on
  * dropped words, bit swaps, or short/odd transfers. Prints sustained MB/s.
  *
  * Build:
- *   make              -> pattern self-test (no SDK)
- *   make d3xx         -> hardware tool (needs D3XX SDK; see README.md)
+ *   make              -> pattern self-test (no USB)
+ *   make hw           -> hardware tool (libusb, default)
+ *   make d3xx         -> hardware tool (FTDI D3XX SDK at /opt/ftdi/d3xx)
  */
 
+#define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <inttypes.h>
 #include <stdint.h>
@@ -17,12 +19,10 @@
 #include <string.h>
 #include <time.h>
 
-#ifndef FT601_NO_D3XX
-#include "ftd3xx.h"
+#ifndef FT601_NO_HW
+#include "ft601_usb.h"
 #endif
 
-#define PIPE_OUT 0x02
-#define PIPE_IN  0x82
 #define WORD_SIZE 4u
 
 typedef struct {
@@ -90,7 +90,7 @@ static int run_self_test(void)
     return rc;
 }
 
-#ifdef FT601_NO_D3XX
+#ifdef FT601_NO_HW
 
 int main(int argc, char **argv)
 {
@@ -99,15 +99,15 @@ int main(int argc, char **argv)
         if (strcmp(argv[i], "--self-test") == 0 || strcmp(argv[i], "-t") == 0)
             return run_self_test();
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
-            printf("This binary was built without D3XX (FT601_NO_D3XX).\n"
+            printf("This binary was built without USB (FT601_NO_HW).\n"
                    "  %s --self-test\n"
-                   "Rebuild with `make d3xx` after installing the FTDI D3XX SDK.\n",
+                   "Rebuild with `make hw` (libusb) or `make d3xx`.\n",
                    argv[0]);
             return 0;
         }
     }
     fprintf(stderr,
-            "No D3XX in this build. Run `%s --self-test` or `make d3xx`.\n",
+            "No USB in this build. Run `%s --self-test` or `make hw`.\n",
             argv[0]);
     return 2;
 }
@@ -126,7 +126,7 @@ static void usage(const char *argv0)
     fprintf(stderr,
             "Usage: %s [options]\n"
             "  --bytes N       bytes to transfer (default 16777216)\n"
-            "  --index N       D3XX device index (default 0)\n"
+            "  --index N       FT601 index if several 0403:601f (default 0)\n"
             "  --tx-only       read-only; expect FPGA TX_COUNTER bitstream\n"
             "  --timeout-ms N  pipe timeout (default 5000)\n"
             "  --self-test     no hardware; test the matcher\n"
@@ -137,12 +137,12 @@ static void usage(const char *argv0)
 int main(int argc, char **argv)
 {
     uint64_t nbytes = 16u * 1024u * 1024u;
-    ULONG index = 0;
-    ULONG timeout_ms = 5000;
+    int index = 0;
+    unsigned timeout_ms = 5000;
     int tx_only = 0;
     int i;
-    FT_HANDLE handle = NULL;
-    FT_STATUS st;
+    ft601_dev *dev = NULL;
+    char err[256];
     uint32_t *tx = NULL;
     uint32_t *rx = NULL;
     size_t nwords;
@@ -156,9 +156,9 @@ int main(int argc, char **argv)
         if ((strcmp(argv[i], "--bytes") == 0) && i + 1 < argc) {
             nbytes = strtoull(argv[++i], NULL, 0);
         } else if ((strcmp(argv[i], "--index") == 0) && i + 1 < argc) {
-            index = (ULONG)strtoul(argv[++i], NULL, 0);
+            index = (int)strtol(argv[++i], NULL, 0);
         } else if ((strcmp(argv[i], "--timeout-ms") == 0) && i + 1 < argc) {
-            timeout_ms = (ULONG)strtoul(argv[++i], NULL, 0);
+            timeout_ms = (unsigned)strtoul(argv[++i], NULL, 0);
         } else if (strcmp(argv[i], "--tx-only") == 0) {
             tx_only = 1;
         } else if (strcmp(argv[i], "--self-test") == 0 ||
@@ -188,17 +188,14 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    st = FT_Create((PVOID)(uintptr_t)index, FT_OPEN_BY_INDEX, &handle);
-    if (st != FT_OK || handle == NULL) {
-        fprintf(stderr, "error: FT_Create index %lu failed (%lu)\n",
-                (unsigned long)index, (unsigned long)st);
+    dev = ft601_open(index, timeout_ms, err, sizeof(err));
+    if (!dev) {
+        fprintf(stderr, "error: %s\n", err);
         free(tx);
         free(rx);
         return 1;
     }
-
-    FT_SetPipeTimeout(handle, PIPE_OUT, timeout_ms);
-    FT_SetPipeTimeout(handle, PIPE_IN, timeout_ms);
+    printf("FT601 backend : %s\n", ft601_backend_name());
 
     memset(&vs, 0, sizeof(vs));
     t0 = monotonic_sec();
@@ -206,7 +203,7 @@ int main(int argc, char **argv)
     while (bytes_done < nbytes) {
         size_t this_words = chunk_words;
         size_t remaining = (size_t)((nbytes - bytes_done) / WORD_SIZE);
-        ULONG xferred = 0;
+        size_t xferred = 0;
         size_t w;
 
         if (this_words > remaining)
@@ -216,13 +213,10 @@ int main(int argc, char **argv)
             for (w = 0; w < this_words; w++)
                 tx[w] = pattern_word(next_idx + w);
             xferred = 0;
-            st = FT_WritePipe(handle, PIPE_OUT, (PUCHAR)tx,
-                              (ULONG)(this_words * WORD_SIZE), &xferred, NULL);
-            if (st != FT_OK || xferred != this_words * WORD_SIZE) {
-                fprintf(stderr,
-                        "error: FT_WritePipe %lu (%lu bytes of %zu)\n",
-                        (unsigned long)st, (unsigned long)xferred,
-                        this_words * WORD_SIZE);
+            if (ft601_write(dev, tx, this_words * WORD_SIZE, &xferred) != 0 ||
+                xferred != this_words * WORD_SIZE) {
+                fprintf(stderr, "error: write %zu bytes of %zu\n",
+                        xferred, this_words * WORD_SIZE);
                 vs.bytes_odd += (this_words * WORD_SIZE) - xferred;
                 break;
             }
@@ -231,21 +225,21 @@ int main(int argc, char **argv)
         }
 
         xferred = 0;
-        st = FT_ReadPipe(handle, PIPE_IN, (PUCHAR)rx,
-                         (ULONG)(this_words * WORD_SIZE), &xferred, NULL);
-        if (st != FT_OK) {
-            fprintf(stderr, "error: FT_ReadPipe %lu\n", (unsigned long)st);
+        if (ft601_read(dev, rx, this_words * WORD_SIZE, &xferred) != 0) {
+            fprintf(stderr, "error: read failed (%zu bytes)\n", xferred);
+            if ((xferred % WORD_SIZE) != 0)
+                vs.bytes_odd += xferred % WORD_SIZE;
             break;
         }
         if ((xferred % WORD_SIZE) != 0) {
-            fprintf(stderr, "error: odd read %lu bytes (not a whole word)\n",
-                    (unsigned long)xferred);
+            fprintf(stderr, "error: odd read %zu bytes (not a whole word)\n",
+                    xferred);
             vs.bytes_odd += xferred % WORD_SIZE;
             break;
         }
         if (xferred != this_words * WORD_SIZE) {
-            fprintf(stderr, "error: short read %lu of %zu bytes\n",
-                    (unsigned long)xferred, this_words * WORD_SIZE);
+            fprintf(stderr, "error: short read %zu of %zu bytes\n",
+                    xferred, this_words * WORD_SIZE);
             vs.bytes_odd += (this_words * WORD_SIZE) - xferred;
             /* still verify whatever arrived, then fail closed */
         }
@@ -261,7 +255,7 @@ int main(int argc, char **argv)
     }
 
     t1 = monotonic_sec();
-    FT_Close(handle);
+    ft601_close(dev);
     free(tx);
     free(rx);
 

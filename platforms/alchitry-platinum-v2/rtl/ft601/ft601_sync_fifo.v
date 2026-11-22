@@ -3,9 +3,13 @@
 // Active-low FT601 strobes keep Alchitry port names: ft_rxf, ft_txe, ft_oe,
 // ft_rd, ft_wr.
 //
-// Read:  OE one cycle, then OE+RD. Capture DATA/BE while ft_rxf is low.
-// Write: DATA/BE/WR registered together; accepted on the next rising ft_clk
-//        while ft_txe is low. One word per WRITE visit (correct, simple).
+// All pads are registered in IOB FFs. The FSM never looks at a live pad —
+// that was the −0.555 ns ft_clk input-path fail (RXF → LUT → OE IOB).
+//
+// Read:  OE one cycle, then OE+RD at the pads, then one extra cycle so the
+//        IOB capture of DATA/BE/RXF is from a cycle where RD was asserted.
+// Write: DATA/BE/WR registered together in IOB; accepted the next ft_clk
+//        while TXE was low. One word per WRITE visit.
 // Turnaround always passes through IDLE so FPGA drive and OE never overlap.
 module ft601_sync_fifo (
     input  wire        ft_clk,
@@ -30,13 +34,19 @@ module ft601_sync_fifo (
     output wire        tx_ready
 );
 
-    localparam ST_IDLE  = 2'd0;
-    localparam ST_OE    = 2'd1;
-    localparam ST_READ  = 2'd2;
-    localparam ST_WRITE = 2'd3;
+    localparam ST_IDLE    = 3'd0;
+    localparam ST_OE      = 3'd1;
+    localparam ST_RD_WAIT = 3'd2;
+    localparam ST_READ    = 3'd3;
+    localparam ST_WRITE   = 3'd4;
 
-    (* IOB = "TRUE" *) reg rxf_r;
-    (* IOB = "TRUE" *) reg txe_r;
+    // Input FFs stay in fabric. Packing them in ILOGIC inserts a 7-series
+    // ZHOLD_DELAY (~6.25 ns) that fails setup vs FT601 tCO. Clock insertion
+    // delay already covers pad hold. Output pads still use IOB FFs.
+    (* IOB = "FALSE" *) reg        rxf_r;
+    (* IOB = "FALSE" *) reg        txe_r;
+    (* IOB = "FALSE" *) reg [31:0] data_i_r;
+    (* IOB = "FALSE" *) reg [3:0]  be_i_r;
 
     (* IOB = "TRUE" *) reg        oe_n_r;
     (* IOB = "TRUE" *) reg        rd_n_r;
@@ -52,11 +62,13 @@ module ft601_sync_fifo (
     assign ft_be   = data_oe_r ? be_o_r   : 4'bz;
 
     always @(posedge ft_clk) begin
-        rxf_r <= ft_rxf;
-        txe_r <= ft_txe;
+        rxf_r    <= ft_rxf;
+        txe_r    <= ft_txe;
+        data_i_r <= ft_data;
+        be_i_r   <= ft_be;
     end
 
-    reg [1:0]  state;
+    reg [2:0]  state;
     reg        rx_valid_r;
     reg [31:0] rx_data_r;
     reg [3:0]  rx_be_r;
@@ -64,10 +76,10 @@ module ft601_sync_fifo (
     assign rx_valid = rx_valid_r;
     assign rx_data  = rx_data_r;
     assign rx_be    = rx_be_r;
-    // Combinational: pop the FWFT FIFO on the same edge the FT601 samples
-    // DATA/WR. A registered ready delayed the pop by one cycle and
-    // re-drove the previous word.
-    assign tx_ready = (state == ST_WRITE) && (ft_txe == 1'b0) && !rst;
+    // Combinational: pop the FWFT FIFO on the same edge DATA/WR are loaded
+    // into the output IOB FFs. A registered ready delayed the pop by one
+    // cycle and re-drove the previous word.
+    assign tx_ready = (state == ST_WRITE) && (txe_r == 1'b0) && !rst;
 
     wire want_read  = (rxf_r == 1'b0) && rx_ready;
     wire want_write = (txe_r == 1'b0) && tx_valid;
@@ -106,21 +118,38 @@ module ft601_sync_fifo (
                 end
 
                 ST_OE: begin
-                    oe_n_r <= 1'b0;
-                    rd_n_r <= 1'b0;
-                    state  <= ST_READ;
+                    // OE is at the pads this cycle. Assert RD so the next
+                    // edge has OE+RD at the FT601 (datasheet turnaround).
+                    oe_n_r    <= 1'b0;
+                    rd_n_r    <= 1'b0;
+                    wr_n_r    <= 1'b1;
+                    data_oe_r <= 1'b0;
+                    state     <= ST_RD_WAIT;
+                end
+
+                ST_RD_WAIT: begin
+                    // RD is at the pads this cycle. IOB FFs capture DATA/BE
+                    // and RXF on this edge; the FSM consumes them next.
+                    oe_n_r    <= 1'b0;
+                    rd_n_r    <= 1'b0;
+                    wr_n_r    <= 1'b1;
+                    data_oe_r <= 1'b0;
+                    state     <= ST_READ;
                 end
 
                 ST_READ: begin
-                    // Pads have OE=0, RD=0 this edge. Sample live RXF so we
-                    // do not capture a cycle after the FIFO goes empty.
-                    if (ft_rxf == 1'b0) begin
+                    wr_n_r    <= 1'b1;
+                    data_oe_r <= 1'b0;
+                    // rxf_r / data_i_r / be_i_r are from the previous cycle,
+                    // when RD was asserted at the pads.
+                    if (rxf_r == 1'b0) begin
+                        rx_valid_r <= 1'b1;
+                        rx_data_r  <= data_i_r;
+                        rx_be_r    <= be_i_r;
                         if (rx_ready) begin
-                            rx_valid_r <= 1'b1;
-                            rx_data_r  <= ft_data;
-                            rx_be_r    <= ft_be;
-                            oe_n_r     <= 1'b0;
-                            rd_n_r     <= 1'b0;
+                            oe_n_r <= 1'b0;
+                            rd_n_r <= 1'b0;
+                            state  <= ST_READ;
                         end else begin
                             oe_n_r <= 1'b1;
                             rd_n_r <= 1'b1;
@@ -134,10 +163,13 @@ module ft601_sync_fifo (
                 end
 
                 ST_WRITE: begin
-                    // Pads have WR=0 and DATA this edge. Live TXE decides
-                    // whether the FT601 accepted the word.
+                    // Pads have WR=0 and DATA this edge (IOB FFs loaded last
+                    // cycle). Release the bus and return to IDLE so the next
+                    // visit has a full turnaround cycle.
                     wr_n_r    <= 1'b1;
                     data_oe_r <= 1'b0;
+                    oe_n_r    <= 1'b1;
+                    rd_n_r    <= 1'b1;
                     state     <= ST_IDLE;
                 end
 
