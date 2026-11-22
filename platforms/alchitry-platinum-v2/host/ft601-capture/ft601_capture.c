@@ -1,14 +1,16 @@
 /*
- * FT601 LA triggered capture dump (FTDI D3XX).
+ * FT601 LA triggered capture dump.
  *
  * Writes a START/STOP command, then reads a LAT3 header (trigger position,
  * overflow/drop counts) plus packed 8-bit samples.
  *
  * Build:
- *   make              -> packer + header self-test (no SDK)
- *   make d3xx         -> hardware tool (needs D3XX SDK)
+ *   make              -> packer + header self-test (no USB)
+ *   make hw           -> hardware tool (libusb, default)
+ *   make d3xx         -> hardware tool (FTDI D3XX SDK at /opt/ftdi/d3xx)
  */
 
+#define _POSIX_C_SOURCE 200809L
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -16,12 +18,10 @@
 #include <string.h>
 #include <time.h>
 
-#ifndef FT601_NO_D3XX
-#include "ftd3xx.h"
+#ifndef FT601_NO_HW
+#include "ft601_usb.h"
 #endif
 
-#define PIPE_OUT 0x02
-#define PIPE_IN  0x82
 #define WORD_SIZE 4u
 #define HDR_WORDS 8u
 #define HDR_BYTES (HDR_WORDS * WORD_SIZE)
@@ -240,7 +240,7 @@ static int run_self_test(void)
     return rc;
 }
 
-#ifdef FT601_NO_D3XX
+#ifdef FT601_NO_HW
 
 int main(int argc, char **argv)
 {
@@ -249,15 +249,15 @@ int main(int argc, char **argv)
         if (strcmp(argv[i], "--self-test") == 0 || strcmp(argv[i], "-t") == 0)
             return run_self_test();
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
-            printf("This binary was built without D3XX (FT601_NO_D3XX).\n"
+            printf("This binary was built without USB (FT601_NO_HW).\n"
                    "  %s --self-test\n"
-                   "Rebuild with `make d3xx` after installing the FTDI D3XX SDK.\n",
+                   "Rebuild with `make hw` (libusb) or `make d3xx`.\n",
                    argv[0]);
             return 0;
         }
     }
     fprintf(stderr,
-            "No D3XX in this build. Run `%s --self-test` or `make d3xx`.\n",
+            "No USB in this build. Run `%s --self-test` or `make hw`.\n",
             argv[0]);
     return 2;
 }
@@ -284,31 +284,27 @@ static unsigned parse_edge(const char *s)
     return 99u;
 }
 
-static int write_word(FT_HANDLE handle, uint32_t word)
+static int write_word(ft601_dev *dev, uint32_t word)
 {
-    ULONG xferred = 0;
-    FT_STATUS st = FT_WritePipe(handle, PIPE_OUT, (PUCHAR)&word, WORD_SIZE,
-                                &xferred, NULL);
-    if (st != FT_OK || xferred != WORD_SIZE) {
-        fprintf(stderr, "error: FT_WritePipe %lu\n", (unsigned long)st);
+    size_t xferred = 0;
+    if (ft601_write(dev, &word, WORD_SIZE, &xferred) != 0 ||
+        xferred != WORD_SIZE) {
+        fprintf(stderr, "error: write command (%zu bytes)\n", xferred);
         return -1;
     }
     return 0;
 }
 
-static int read_exact(FT_HANDLE handle, void *buf, size_t nbytes, ULONG timeout_unused)
+static int read_exact(ft601_dev *dev, void *buf, size_t nbytes)
 {
-    ULONG xferred = 0;
-    FT_STATUS st;
-    (void)timeout_unused;
-    st = FT_ReadPipe(handle, PIPE_IN, (PUCHAR)buf, (ULONG)nbytes, &xferred, NULL);
-    if (st != FT_OK) {
-        fprintf(stderr, "error: FT_ReadPipe %lu\n", (unsigned long)st);
+    size_t xferred = 0;
+    if (ft601_read(dev, buf, nbytes, &xferred) != 0) {
+        fprintf(stderr, "error: read failed (%zu of %zu bytes)\n", xferred,
+                nbytes);
         return -1;
     }
     if (xferred != nbytes) {
-        fprintf(stderr, "error: short read %lu of %zu bytes\n",
-                (unsigned long)xferred, nbytes);
+        fprintf(stderr, "error: short read %zu of %zu bytes\n", xferred, nbytes);
         return -1;
     }
     return 0;
@@ -318,7 +314,7 @@ static void usage(const char *argv0)
 {
     fprintf(stderr,
             "Usage: %s [options]\n"
-            "  --index N         D3XX device index (default 0)\n"
+            "  --index N         FT601 index if several 0403:601f (default 0)\n"
             "  --timeout-ms N    pipe timeout (default 5000)\n"
             "  --dump FILE       write packed little-endian payload words\n"
             "  --pattern NAME    counter|walking|none (default counter)\n"
@@ -334,8 +330,8 @@ static void usage(const char *argv0)
 
 int main(int argc, char **argv)
 {
-    ULONG index = 0;
-    ULONG timeout_ms = 5000;
+    int index = 0;
+    unsigned timeout_ms = 5000;
     const char *dump_path = NULL;
     const char *pattern = "counter";
     int source_val = 0;
@@ -344,8 +340,8 @@ int main(int argc, char **argv)
     unsigned post_n = 0;
     int send_stop = 0;
     int i;
-    FT_HANDLE handle = NULL;
-    FT_STATUS st;
+    ft601_dev *dev = NULL;
+    char err[256];
     uint32_t hdr_raw[HDR_WORDS];
     lat3_header hdr;
     uint32_t *rx = NULL;
@@ -358,9 +354,9 @@ int main(int argc, char **argv)
 
     for (i = 1; i < argc; i++) {
         if ((strcmp(argv[i], "--index") == 0) && i + 1 < argc) {
-            index = (ULONG)strtoul(argv[++i], NULL, 0);
+            index = (int)strtol(argv[++i], NULL, 0);
         } else if ((strcmp(argv[i], "--timeout-ms") == 0) && i + 1 < argc) {
-            timeout_ms = (ULONG)strtoul(argv[++i], NULL, 0);
+            timeout_ms = (unsigned)strtoul(argv[++i], NULL, 0);
         } else if ((strcmp(argv[i], "--dump") == 0) && i + 1 < argc) {
             dump_path = argv[++i];
         } else if ((strcmp(argv[i], "--pattern") == 0) && i + 1 < argc) {
@@ -412,17 +408,14 @@ int main(int argc, char **argv)
         }
     }
 
-    st = FT_Create((PVOID)(uintptr_t)index, FT_OPEN_BY_INDEX, &handle);
-    if (st != FT_OK || handle == NULL) {
-        fprintf(stderr, "error: FT_Create index %lu failed (%lu)\n",
-                (unsigned long)index, (unsigned long)st);
+    dev = ft601_open(index, timeout_ms, err, sizeof(err));
+    if (!dev) {
+        fprintf(stderr, "error: %s\n", err);
         if (dump)
             fclose(dump);
         return 1;
     }
-
-    FT_SetPipeTimeout(handle, PIPE_OUT, timeout_ms);
-    FT_SetPipeTimeout(handle, PIPE_IN, timeout_ms);
+    printf("FT601 backend : %s\n", ft601_backend_name());
 
     memset(&vs, 0, sizeof(vs));
     t0 = monotonic_sec();
@@ -433,16 +426,16 @@ int main(int argc, char **argv)
                                       post_n)
                            : make_cmd(CMD_START, (unsigned)source_val, channel, edge,
                                       post_n);
-        if (write_word(handle, cmd) != 0) {
-            FT_Close(handle);
+        if (write_word(dev, cmd) != 0) {
+            ft601_close(dev);
             if (dump)
                 fclose(dump);
             return 1;
         }
     }
 
-    if (read_exact(handle, hdr_raw, HDR_BYTES, timeout_ms) != 0) {
-        FT_Close(handle);
+    if (read_exact(dev, hdr_raw, HDR_BYTES) != 0) {
+        ft601_close(dev);
         if (dump)
             fclose(dump);
         return 1;
@@ -450,7 +443,7 @@ int main(int argc, char **argv)
     if (parse_header(hdr_raw, &hdr) != 0) {
         fprintf(stderr, "error: LAT3 header magic/version mismatch (got 0x%08x 0x%08x)\n",
                 hdr_raw[0], hdr_raw[1]);
-        FT_Close(handle);
+        ft601_close(dev);
         if (dump)
             fclose(dump);
         return 1;
@@ -464,7 +457,7 @@ int main(int argc, char **argv)
     rx = (uint32_t *)malloc(nwords ? nwords * WORD_SIZE : WORD_SIZE);
     if (!rx) {
         fprintf(stderr, "error: out of memory\n");
-        FT_Close(handle);
+        ft601_close(dev);
         if (dump)
             fclose(dump);
         return 1;
@@ -474,9 +467,9 @@ int main(int argc, char **argv)
         size_t nbytes = nwords * WORD_SIZE;
         uint8_t a, b, c, d;
         double now;
-        if (read_exact(handle, rx, nbytes, timeout_ms) != 0) {
+        if (read_exact(dev, rx, nbytes) != 0) {
             free(rx);
-            FT_Close(handle);
+            ft601_close(dev);
             if (dump)
                 fclose(dump);
             return 1;
@@ -492,7 +485,7 @@ int main(int argc, char **argv)
     }
 
     t1 = monotonic_sec();
-    FT_Close(handle);
+    ft601_close(dev);
     if (dump)
         fclose(dump);
     free(rx);

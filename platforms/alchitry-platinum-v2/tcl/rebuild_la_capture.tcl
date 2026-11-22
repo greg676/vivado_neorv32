@@ -13,6 +13,8 @@
 #   set la_post        2048         ;# default post-trigger samples
 #   set la_trig_ch     0            ;# trigger channel 0-7
 #   set la_trig_edge   0            ;# 0=rise 1=fall 2=both 3=immediate
+#   set skip_impl      1            ;# project only, no bitstream
+#   set impl_jobs      8
 
 if {![info exists ft601_pinout]} {
     set ft601_pinout "pt_alpha"
@@ -82,8 +84,10 @@ if {$ft601_pinout eq "v2"} {
 add_files -fileset constrs_1 [list \
     $pin_xdc \
     ./constraints/ptv2_ft601_loopback.xdc \
+    ./constraints/ptv2_ft601_impl.xdc \
     ./constraints/ptv2_la_capture.xdc \
 ]
+set_property used_in_synthesis false [get_files -quiet *ptv2_ft601_impl.xdc]
 
 set_property top la_capture_top [current_fileset]
 set_property generic [list \
@@ -96,6 +100,10 @@ set_property generic [list \
 ] [get_filesets sources_1]
 
 puts "Project created at $project_dir"
-puts "Next: open in Vivado and Generate Bitstream, or:"
-puts "  launch_runs impl_1 -to_step write_bitstream -jobs 4"
-puts "  wait_on_run impl_1"
+puts "GUI: File → Open Project → $project_dir/la_capture.xpr"
+puts "RAM program (not flash): vivado -mode batch -source tcl/program_ram.tcl -tclargs \\"
+puts "  $project_dir/la_capture.runs/impl_1/la_capture_top.bit"
+
+if {![info exists skip_impl] || !$skip_impl} {
+    source [file join [file dirname [info script]] run_impl.tcl]
+}

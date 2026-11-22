@@ -110,33 +110,87 @@ Full details: [Wiki → Gotchas](../../wiki/Gotchas)
 | **[PicoDualProbe](https://github.com/greg676/PicoDualProbe)** | $5 dual SWD/JTAG debug probe |
 | **[NeoRV32 MCP Server](https://github.com/greg676/neorv32-mcp)** | AI agent bridge — 15 tools for hardware control |
 
-## FT601 USB3 loopback (separate top)
+## Logic analyzer (Pt V2 + Ft+ + Br)
 
-USB 3 bring-up uses a dedicated top so NeoRV32 is not wired into the FT601 yet.
+Dedicated tops — NeoRV32 is **not** instantiated. No DDR3 MIG / LiteX this pass. First-batch hardware is **PT_ALPHA** (default). Production Pt V2 is an optional TCL switch.
+
+Work from this directory:
 
 ```bash
 cd platforms/alchitry-platinum-v2
-vivado -mode batch -source tcl/rebuild_ft601_loopback.tcl
-make -C host/ft601-loopback selftest
 ```
 
-Pinout defaults to first-batch `PT_ALPHA` (matches this repo's existing FT601 notes). Production Pt V2: `set ft601_pinout "v2"` before sourcing the TCL. Host tool + SDK notes: `host/ft601-loopback/README.md`.
+### Open / rebuild
 
-## Logic analyzer capture (separate top)
+| What | Project | TCL | Top |
+|---|---|---|---|
+| FT601 USB3 loopback | `vivado_project_ft601/ft601_loopback.xpr` | `tcl/rebuild_ft601_loopback.tcl` | `ft601_loopback_top` |
+| 8-ch triggered LA | `vivado_project_la_capture/la_capture.xpr` | `tcl/rebuild_la_capture.tcl` | `la_capture_top` |
 
-8-channel sampler with edge trigger and BRAM circular pre-trigger. Dedicated top — NeoRV32 is not instantiated. No DDR3 MIG in this bitstream.
+Batch (Vivado 2025.2, recreates the project and runs impl through bitstream):
 
 ```bash
-cd platforms/alchitry-platinum-v2
+vivado -mode batch -source tcl/rebuild_ft601_loopback.tcl
 vivado -mode batch -source tcl/rebuild_la_capture.tcl
-make -C host/ft601-capture selftest
+```
+
+GUI: **File → Open Project** and pick the `.xpr` above. `set skip_impl 1` before sourcing the TCL if you only want the project.
+
+Copies land in `bitstreams/<top>_pt_alpha.bit` (gitignored) and in each run's `impl_1/` folder.
+
+### PT_ALPHA vs v2
+
+Default pinout is **PT_ALPHA** (`constraints/ptv2_ft601_pins_pt_alpha.xdc`) — first-batch Bank B, matches this repo's 2026-05-21 notes. Only `ft_data[0:13]` differ on production V2.
+
+```tcl
+set ft601_pinout "v2"          ;# production Pt — constraints/ptv2_ft601_pins_v2.xdc
+source tcl/rebuild_ft601_loopback.tcl
+# same knob on tcl/rebuild_la_capture.tcl
+```
+
+Wrong file looks like bit-swaps on DATA[0:13] in the host checker.
+
+### Program RAM, not flash
+
+```bash
+vivado -mode batch -source tcl/program_ram.tcl -tclargs \
+  bitstreams/ft601_loopback_top_pt_alpha.bit
+# or
+vivado -mode batch -source tcl/program_ram.tcl -tclargs \
+  vivado_project_ft601/ft601_loopback.runs/impl_1/ft601_loopback_top.bit
+```
+
+`program_ram.tcl` calls `program_hw_devices` only. It does **not** write SPI flash or generate `.mcs`.
+
+### Host tools
+
+libusb-1.0 is the default hardware path. D3XX is optional.
+
+```bash
+make -C host/ft601-loopback selftest hw
+make -C host/ft601-capture selftest hw
+make -C sim/ft601
 make -C sim/la
 ```
 
-Host dump (trigger position in the LAT3 header): `host/ft601-capture/README.md`.
+When the Ft+ is plugged in:
+
+```bash
+./host/ft601-loopback/ft601_loopback --bytes 16777216
+./host/ft601-capture/ft601_capture --source 0 --edge rise --post 2048
+```
+
+Optional D3XX on this bench (OpenClaw): **`/opt/ftdi/d3xx/libftd3xx.so`**. Header `ftd3xx.h` is **not** installed, so `make d3xx` cannot compile until a full SDK unpack. Python ctypes works with the `.so` alone:
+
+```bash
+export FTD3XX_LIB=/opt/ftdi/d3xx/libftd3xx.so
+python3 host/ft601-loopback/ft601_loopback.py --backend d3xx --bytes 16777216
+```
+
+Details: `host/ft601-loopback/README.md`, `host/ft601-capture/README.md`.
 
 ## Status
 
-**Active.** Bitstream v0.29, firmware debug-console rev0. MCP server v3 tested against live hardware. FT601 loopback sources are in-tree; Vivado synthesis of that top is not run in CI.
+**Active.** Bitstream v0.29, firmware debug-console rev0. MCP server v3 tested against live hardware. FT601 loopback + LA capture sources are in-tree; host path is libusb (D3XX optional).
 
 MIT License

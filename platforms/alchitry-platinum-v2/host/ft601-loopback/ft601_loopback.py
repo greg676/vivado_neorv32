@@ -1,27 +1,23 @@
 #!/usr/bin/env python3
-"""FT601 32-bit loopback / TX-counter host tool (FTDI D3XX via ctypes).
+"""FT601 32-bit loopback / TX-counter host tool.
 
 Fails closed on dropped words, bit swaps, and odd/short transfers.
 Prints sustained throughput.
 
-The D3XX shared library (libftd3xx.so / FTD3XX.dll / libftd3xx.dylib) must
-be installed for hardware runs. --self-test does not need it.
+Hardware uses libusb (preferred). D3XX is an optional fallback if the
+Linux SDK is unpacked to /opt/ftdi/d3xx. --self-test needs neither.
 """
 
 from __future__ import annotations
 
 import argparse
-import ctypes
 import os
 import sys
 import time
-from ctypes import POINTER, c_uint8, c_ulong, c_void_p
 from typing import List, Optional, Tuple
 
-PIPE_OUT = 0x02
-PIPE_IN = 0x82
-FT_OK = 0
-FT_OPEN_BY_INDEX = 0
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "common"))
+from ft601_usb import open_ft601  # noqa: E402
 
 WORD = 4
 
@@ -62,45 +58,6 @@ def self_test() -> int:
     return 0
 
 
-def load_d3xx() -> ctypes.CDLL:
-    names = [
-        os.environ.get("FTD3XX_LIB"),
-        "libftd3xx.so",
-        "libftd3xx.dylib",
-        "FTD3XX.dll",
-    ]
-    last = None
-    for name in names:
-        if not name:
-            continue
-        try:
-            lib = ctypes.CDLL(name)
-            break
-        except OSError as exc:
-            last = exc
-            lib = None
-    else:
-        raise FileNotFoundError(
-            "D3XX library not found. Install the FTDI D3XX SDK and put "
-            "libftd3xx.so on LD_LIBRARY_PATH, or set FTD3XX_LIB. "
-            f"Last error: {last}"
-        )
-
-    lib.FT_Create.argtypes = [c_void_p, c_ulong, POINTER(c_void_p)]
-    lib.FT_Create.restype = c_ulong
-    lib.FT_Close.argtypes = [c_void_p]
-    lib.FT_Close.restype = c_ulong
-    lib.FT_WritePipe.argtypes = [c_void_p, c_uint8, ctypes.c_void_p, c_ulong,
-                                 POINTER(c_ulong), c_void_p]
-    lib.FT_WritePipe.restype = c_ulong
-    lib.FT_ReadPipe.argtypes = [c_void_p, c_uint8, ctypes.c_void_p, c_ulong,
-                                POINTER(c_ulong), c_void_p]
-    lib.FT_ReadPipe.restype = c_ulong
-    lib.FT_SetPipeTimeout.argtypes = [c_void_p, c_uint8, c_ulong]
-    lib.FT_SetPipeTimeout.restype = c_ulong
-    return lib
-
-
 def words_to_bytes(words: List[int]) -> bytes:
     return b"".join(int(w).to_bytes(4, "little") for w in words)
 
@@ -110,15 +67,12 @@ def bytes_to_words(buf: bytes) -> List[int]:
 
 
 def run_hw(args: argparse.Namespace) -> int:
-    lib = load_d3xx()
-    handle = c_void_p()
-    st = lib.FT_Create(c_void_p(args.index), FT_OPEN_BY_INDEX, ctypes.byref(handle))
-    if st != FT_OK or not handle.value:
-        print(f"error: FT_Create index {args.index} failed ({st})", file=sys.stderr)
-        return 1
-
-    lib.FT_SetPipeTimeout(handle, PIPE_OUT, args.timeout_ms)
-    lib.FT_SetPipeTimeout(handle, PIPE_IN, args.timeout_ms)
+    try:
+        dev = open_ft601(index=args.index, timeout_ms=args.timeout_ms,
+                         backend=args.backend)
+    except FileNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
     nwords = args.bytes // WORD
     chunk = min(16 * 1024, nwords)
@@ -133,31 +87,27 @@ def run_hw(args: argparse.Namespace) -> int:
     try:
         while bytes_done < args.bytes:
             this = min(chunk, (args.bytes - bytes_done) // WORD)
-            xferred = c_ulong(0)
 
             if not args.tx_only:
                 payload = words_to_bytes([pattern_word(next_idx + i) for i in range(this)])
-                st = lib.FT_WritePipe(handle, PIPE_OUT, payload, len(payload),
-                                      ctypes.byref(xferred), None)
-                if st != FT_OK or xferred.value != len(payload):
-                    print(f"error: FT_WritePipe {st} ({xferred.value} of {len(payload)})",
-                          file=sys.stderr)
-                    odd_bytes += abs(len(payload) - int(xferred.value))
+                try:
+                    dev.write(payload)
+                except RuntimeError as exc:
+                    print(f"error: {exc}", file=sys.stderr)
+                    odd_bytes += 1
                     break
 
-            rx = ctypes.create_string_buffer(this * WORD)
-            xferred = c_ulong(0)
-            st = lib.FT_ReadPipe(handle, PIPE_IN, rx, this * WORD,
-                                 ctypes.byref(xferred), None)
-            if st != FT_OK:
-                print(f"error: FT_ReadPipe {st}", file=sys.stderr)
+            try:
+                raw = dev.read(this * WORD)
+            except RuntimeError as exc:
+                print(f"error: {exc}", file=sys.stderr)
                 break
-            n = int(xferred.value)
+            n = len(raw)
             if n % WORD != 0:
                 print(f"error: odd read {n} bytes (not a whole word)", file=sys.stderr)
                 odd_bytes += n % WORD
                 break
-            got = bytes_to_words(rx.raw[:n])
+            got = bytes_to_words(raw)
             ok, bad, first = verify_words(got, next_idx)
             words_ok += ok
             words_bad += bad
@@ -169,7 +119,7 @@ def run_hw(args: argparse.Namespace) -> int:
             next_idx += this
             bytes_done += this * WORD
     finally:
-        lib.FT_Close(handle)
+        dev.close()
 
     dt = time.perf_counter() - t0
     mibps = (bytes_done / (1024 * 1024) / dt) if dt > 0 else 0.0
@@ -192,11 +142,12 @@ def run_hw(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="FT601 loopback checker (D3XX)")
+    p = argparse.ArgumentParser(description="FT601 loopback checker (libusb, D3XX optional)")
     p.add_argument("--bytes", type=int, default=16 * 1024 * 1024)
     p.add_argument("--index", type=int, default=0)
     p.add_argument("--timeout-ms", type=int, default=5000)
     p.add_argument("--tx-only", action="store_true")
+    p.add_argument("--backend", choices=("auto", "libusb", "d3xx"), default="auto")
     p.add_argument("--self-test", action="store_true")
     args = p.parse_args()
     if args.self_test:
@@ -204,11 +155,7 @@ def main() -> int:
     if args.bytes < WORD or args.bytes % WORD:
         print("error: --bytes must be a positive multiple of 4", file=sys.stderr)
         return 2
-    try:
-        return run_hw(args)
-    except FileNotFoundError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
+    return run_hw(args)
 
 
 if __name__ == "__main__":

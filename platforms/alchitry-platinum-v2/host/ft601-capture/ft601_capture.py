@@ -2,23 +2,21 @@
 """FT601 triggered capture dump: LAT3 header + packed 8-bit LA samples.
 
 Writes START/STOP, reads the 8-word header (trigger position, overflow/drop),
-then packed little-endian payload. --self-test does not need the D3XX SDK.
+then packed little-endian payload. Hardware uses libusb (preferred); D3XX is
+optional via FTD3XX_LIB=/opt/ftdi/d3xx/libftd3xx.so. --self-test needs neither.
 """
 
 from __future__ import annotations
 
 import argparse
-import ctypes
 import os
 import sys
 import time
-from ctypes import POINTER, c_uint8, c_ulong, c_void_p
 from typing import List, Optional, Tuple
 
-PIPE_OUT = 0x02
-PIPE_IN = 0x82
-FT_OK = 0
-FT_OPEN_BY_INDEX = 0
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "common"))
+from ft601_usb import open_ft601  # noqa: E402
+
 WORD = 4
 HDR_WORDS = 8
 LAT3_MAGIC = 0x3354414C
@@ -170,88 +168,32 @@ def self_test() -> int:
     return 0
 
 
-def load_d3xx() -> ctypes.CDLL:
-    names = [
-        os.environ.get("FTD3XX_LIB"),
-        "libftd3xx.so",
-        "libftd3xx.dylib",
-        "FTD3XX.dll",
-    ]
-    last = None
-    lib = None
-    for name in names:
-        if not name:
-            continue
-        try:
-            lib = ctypes.CDLL(name)
-            break
-        except OSError as exc:
-            last = exc
-    if lib is None:
-        raise FileNotFoundError(
-            "D3XX library not found. Install the FTDI D3XX SDK and put "
-            "libftd3xx.so on LD_LIBRARY_PATH, or set FTD3XX_LIB. "
-            f"Last error: {last}"
-        )
-
-    lib.FT_Create.argtypes = [c_void_p, c_ulong, POINTER(c_void_p)]
-    lib.FT_Create.restype = c_ulong
-    lib.FT_Close.argtypes = [c_void_p]
-    lib.FT_Close.restype = c_ulong
-    lib.FT_WritePipe.argtypes = [c_void_p, c_uint8, ctypes.c_void_p, c_ulong,
-                                 POINTER(c_ulong), c_void_p]
-    lib.FT_WritePipe.restype = c_ulong
-    lib.FT_ReadPipe.argtypes = [c_void_p, c_uint8, ctypes.c_void_p, c_ulong,
-                                POINTER(c_ulong), c_void_p]
-    lib.FT_ReadPipe.restype = c_ulong
-    lib.FT_SetPipeTimeout.argtypes = [c_void_p, c_uint8, c_ulong]
-    lib.FT_SetPipeTimeout.restype = c_ulong
-    return lib
-
-
 def bytes_to_words(buf: bytes) -> List[int]:
     return [int.from_bytes(buf[i:i + 4], "little") for i in range(0, len(buf), 4)]
 
 
-def read_exact(lib, handle, nbytes: int) -> bytes:
-    rx = ctypes.create_string_buffer(nbytes)
-    xferred = c_ulong(0)
-    st = lib.FT_ReadPipe(handle, PIPE_IN, rx, nbytes, ctypes.byref(xferred), None)
-    if st != FT_OK:
-        raise RuntimeError(f"FT_ReadPipe {st}")
-    if int(xferred.value) != nbytes:
-        raise RuntimeError(f"short read {xferred.value} of {nbytes} bytes")
-    return rx.raw[:nbytes]
-
-
 def run_hw(args: argparse.Namespace) -> int:
-    lib = load_d3xx()
-    handle = c_void_p()
-    st = lib.FT_Create(c_void_p(args.index), FT_OPEN_BY_INDEX, ctypes.byref(handle))
-    if st != FT_OK or not handle.value:
-        print(f"error: FT_Create index {args.index} failed ({st})", file=sys.stderr)
-        return 1
-
-    lib.FT_SetPipeTimeout(handle, PIPE_OUT, args.timeout_ms)
-    lib.FT_SetPipeTimeout(handle, PIPE_IN, args.timeout_ms)
+    try:
+        dev = open_ft601(index=args.index, timeout_ms=args.timeout_ms,
+                         backend=args.backend)
+    except FileNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
     dump = open(args.dump, "wb") if args.dump else None
     t0 = time.perf_counter()
     words_ok = 0
     words_bad = 0
     first_bad = None
+    hdr = None
 
     try:
         opcode = CMD_STOP if args.stop else CMD_START
         cmd = make_cmd(opcode, args.source, args.channel, args.edge, args.post)
         raw_cmd = cmd.to_bytes(4, "little")
-        xferred = c_ulong(0)
-        st = lib.FT_WritePipe(handle, PIPE_OUT, raw_cmd, 4, ctypes.byref(xferred), None)
-        if st != FT_OK or xferred.value != 4:
-            print(f"error: FT_WritePipe {st}", file=sys.stderr)
-            return 1
+        dev.write(raw_cmd)
 
-        hdr_raw = read_exact(lib, handle, HDR_WORDS * WORD)
+        hdr_raw = dev.read(HDR_WORDS * WORD)
         hdr = parse_header(bytes_to_words(hdr_raw))
         tpos = hdr["trig_pos"] if hdr["triggered"] else None
         print(
@@ -262,7 +204,7 @@ def run_hw(args: argparse.Namespace) -> int:
         nwords = (hdr["nsamples"] + 3) // 4
         payload = b""
         if nwords:
-            payload = read_exact(lib, handle, nwords * WORD)
+            payload = dev.read(nwords * WORD)
             got = bytes_to_words(payload)
             s0 = unpack_word(got[0]) if got else (0, 0, 0, 0)
             now = time.perf_counter()
@@ -281,7 +223,7 @@ def run_hw(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     finally:
-        lib.FT_Close(handle)
+        dev.close()
         if dump is not None:
             dump.close()
 
@@ -315,9 +257,10 @@ def run_hw(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="FT601 LA triggered capture dump (D3XX)")
+    p = argparse.ArgumentParser(description="FT601 LA triggered capture dump (libusb, D3XX optional)")
     p.add_argument("--index", type=int, default=0)
     p.add_argument("--timeout-ms", type=int, default=5000)
+    p.add_argument("--backend", choices=("auto", "libusb", "d3xx"), default="auto")
     p.add_argument("--dump", metavar="FILE", help="write packed little-endian payload")
     p.add_argument("--pattern", choices=("counter", "walking", "none"), default="counter",
                    help="verify on-FPGA test pattern (default counter)")
