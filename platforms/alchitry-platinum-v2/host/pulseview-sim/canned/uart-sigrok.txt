@@ -1,0 +1,133 @@
+Samplerate: 200000000
+Channels: 8
+- RX: logic
+- D1: logic
+- D2: logic
+- D3: logic
+- D4: logic
+- D5: logic
+- D6: logic
+- D7: logic
+Logic unitsize: 1
+Logic sample count: 28400
+uart-1: Start bit
+uart-1: 0
+uart-1: 0
+uart-1: 0
+uart-1: 1
+uart-1: 0
+uart-1: 0
+uart-1: 1
+uart-1: 0
+uart-1: 48
+uart-1: Stop bit
+uart-1: Start bit
+uart-1: 1
+uart-1: 0
+uart-1: 1
+uart-1: 0
+uart-1: 0
+uart-1: 1
+uart-1: 1
+uart-1: 0
+uart-1: 65
+uart-1: Stop bit
+uart-1: Start bit
+uart-1: 0
+uart-1: 0
+uart-1: 1
+uart-1: 1
+uart-1: 0
+uart-1: 1
+uart-1: 1
+uart-1: 0
+uart-1: 6C
+uart-1: Stop bit
+uart-1: Start bit
+uart-1: 0
+uart-1: 0
+uart-1: 1
+uart-1: 1
+uart-1: 0
+uart-1: 1
+uart-1: 1
+uart-1: 0
+uart-1: 6C
+uart-1: Stop bit
+uart-1: Start bit
+uart-1: 1
+uart-1: 1
+uart-1: 1
+uart-1: 1
+uart-1: 0
+uart-1: 1
+uart-1: 1
+uart-1: 0
+uart-1: 6F
+uart-1: Stop bit
+uart-1: Start bit
+uart-1: 0
+uart-1: 0
+uart-1: 0
+uart-1: 0
+uart-1: 0
+uart-1: 1
+uart-1: 0
+uart-1: 0
+uart-1: 20
+uart-1: Stop bit
+uart-1: Start bit
+uart-1: 1
+uart-1: 0
+uart-1: 1
+uart-1: 0
+uart-1: 1
+uart-1: 0
+uart-1: 1
+uart-1: 0
+uart-1: 55
+uart-1: Stop bit
+uart-1: Start bit
+uart-1: 1
+uart-1: 0
+uart-1: 0
+uart-1: 0
+uart-1: 0
+uart-1: 0
+uart-1: 1
+uart-1: 0
+uart-1: 41
+uart-1: Stop bit
+uart-1: Start bit
+uart-1: 0
+uart-1: 1
+uart-1: 0
+uart-1: 0
+uart-1: 1
+uart-1: 0
+uart-1: 1
+uart-1: 0
+uart-1: 52
+uart-1: Stop bit
+uart-1: Start bit
+uart-1: 0
+uart-1: 0
+uart-1: 1
+uart-1: 0
+uart-1: 1
+uart-1: 0
+uart-1: 1
+uart-1: 0
+uart-1: 54
+uart-1: Stop bit
+uart-1: Start bit
+uart-1: 0
+uart-1: 1
+uart-1: 0
+uart-1: 1
+uart-1: 0
+uart-1: 0
+uart-1: 0
+uart-1: 0
+uart-1: 0A
+uart-1: Stop bit

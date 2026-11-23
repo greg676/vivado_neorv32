@@ -1,0 +1,7 @@
+pattern=i2c
+notes=I2C write 0x50 data=b'Hi' at 400000 Hz (SDA=D0 SCL=D1)
+rate_hz=200000000
+nsamples=16750
+trig_pos=1250
+probes=SDA,SCL,D2,D3,D4,D5,D6,D7
+raw_import=PulseView File>Import>Raw binary; 8 channels; 1 byte/sample; little-endian; 200000000 Hz; bit0=probe1=SDA

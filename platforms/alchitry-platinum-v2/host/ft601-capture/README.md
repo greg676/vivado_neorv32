@@ -8,7 +8,8 @@ post-trigger count, then a USB dump that includes the trigger position.
 This is a **separate bitstream** from NeoRV32 and from the FT601 loopback top.
 Loopback ([host/ft601-loopback](../ft601-loopback/)) stays the USB proof.
 
-No DDR3 MIG, no 4-channel ISERDES, no libsigrok.
+No DDR3 MIG, no 4-channel ISERDES. PulseView import without hardware lives
+in [../pulseview-sim](../pulseview-sim/README.md).
 
 **Preferred USB backend is libusb-1.0.** D3XX is optional (`FTD3XX_LIB=/opt/ftdi/d3xx/libftd3xx.so`).
 
@@ -146,4 +147,5 @@ Proves packer, edge detector, 100/200 MS/s triggered dumps, fall/both/STOP/overf
 
 ## Out of scope (later)
 
-4-ch 400 MS/s ISERDES, DDR3 MIG pre-trigger DMA, libsigrok / PulseView, custom PCB.
+4-ch 400 MS/s ISERDES, DDR3 MIG pre-trigger DMA, a libsigrok hardware driver, custom PCB.
+Simulated PulseView sessions: [../pulseview-sim](../pulseview-sim/README.md).

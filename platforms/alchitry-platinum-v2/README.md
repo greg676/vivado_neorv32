@@ -169,6 +169,7 @@ libusb-1.0 is the default hardware path. D3XX is optional.
 ```bash
 make -C host/ft601-loopback selftest hw
 make -C host/ft601-capture selftest hw
+make -C host/pulseview-sim selftest canned
 make -C sim/ft601
 make -C sim/la
 ```
@@ -187,7 +188,8 @@ export FTD3XX_LIB=/opt/ftdi/d3xx/libftd3xx.so
 python3 host/ft601-loopback/ft601_loopback.py --backend d3xx --bytes 16777216
 ```
 
-Details: `host/ft601-loopback/README.md`, `host/ft601-capture/README.md`.
+Details: `host/ft601-loopback/README.md`, `host/ft601-capture/README.md`,
+`host/pulseview-sim/README.md` (LAT3 → PulseView `.sr`, no hardware).
 
 ## Status
 
