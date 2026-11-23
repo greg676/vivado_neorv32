@@ -1,0 +1,7 @@
+pattern=walking
+notes=FPGA-style walking-one (source 1)
+rate_hz=200000000
+nsamples=4096
+trig_pos=0
+probes=D0,D1,D2,D3,D4,D5,D6,D7
+raw_import=PulseView File>Import>Raw binary; 8 channels; 1 byte/sample; little-endian; 200000000 Hz; bit0=probe1=D0
