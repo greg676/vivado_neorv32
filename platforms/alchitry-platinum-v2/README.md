@@ -126,12 +126,16 @@ cd platforms/alchitry-platinum-v2
 |---|---|---|---|
 | FT601 USB3 loopback | `vivado_project_ft601/ft601_loopback.xpr` | `tcl/rebuild_ft601_loopback.tcl` | `ft601_loopback_top` |
 | 8-ch triggered LA | `vivado_project_la_capture/la_capture.xpr` | `tcl/rebuild_la_capture.tcl` | `la_capture_top` |
+| PVLA catalog IP (BD) | `vivado_project_pvla_bd/pvla_bd.xpr` | `tcl/pvla_bd_example.tcl` | `pvla_bd_wrapper` |
+
+PVLA is a Block Design IP (`greg676:user:pvla:1.0`). Add **Settings → IP → Repository →** `<repo>/ip`. Channels 1–8 resize `probe_i`. FT601 pads are IP-scoped XDCs (`C_BOARD` PT_ALPHA vs PT_V2), not BD nets. See `ip/pvla/README.md`. Does not instantiate NeoRV32 or MIG.
 
 Batch (Vivado 2025.2, recreates the project and runs impl through bitstream):
 
 ```bash
 vivado -mode batch -source tcl/rebuild_ft601_loopback.tcl
 vivado -mode batch -source tcl/rebuild_la_capture.tcl
+vivado -mode batch -source tcl/pvla_bd_example.tcl
 ```
 
 GUI: **File → Open Project** and pick the `.xpr` above. `set skip_impl 1` before sourcing the TCL if you only want the project.
