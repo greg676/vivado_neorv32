@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+"""Structural check for the PVLA Vivado IP (no Vivado required)."""
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+
+IP = Path(__file__).resolve().parents[1]
+REPO = IP.parents[1]
+PLAT = REPO / "platforms" / "alchitry-platinum-v2"
+
+# First-batch vs production DATA[0:13] — docs/ft601-pin-map.md
+ALPHA_DATA_0_13 = [
+    "AB13", "AA13", "AA11", "AA10", "AB12", "AB11", "Y14", "W14",
+    "AB15", "AA15", "W16", "W15", "AB17", "AB16",
+]
+V2_DATA_0_13 = [
+    "R14", "P14", "R16", "P15", "R17", "P16", "P17", "N17",
+    "W17", "V17", "T18", "R18", "AB20", "AA19",
+]
+COMMON = {
+    "ft_clk": "H4",
+    "ft_wakeup": "AB22",
+    "ft_reset": "AB21",
+    "ft_rxf": "N2",
+    "ft_txe": "P2",
+    "ft_oe": "AB18",
+    "ft_rd": "AA18",
+    "ft_wr": "E3",
+}
+
+ERRORS: list[str] = []
+
+
+def err(msg: str) -> None:
+    ERRORS.append(msg)
+
+
+def must_exist(path: Path) -> None:
+    if not path.is_file():
+        err(f"missing {path}")
+
+
+def parse_pkg_pins(xdc: Path) -> dict[str, str]:
+    text = xdc.read_text()
+    pins: dict[str, str] = {}
+    for m in re.finditer(
+        r"set_property\s+PACKAGE_PIN\s+(\S+)\s+\[get_ports\s+(\{[^}]+\}|[^\]]+)\]",
+        text,
+    ):
+        pin, port = m.group(1), m.group(2).strip().strip("{}")
+        pins[port] = pin
+    return pins
+
+
+def check_xdc_map(xdc: Path, data_0_13: list[str]) -> None:
+    pins = parse_pkg_pins(xdc)
+    for port, expect in COMMON.items():
+        got = pins.get(port)
+        if got != expect:
+            err(f"{xdc.name}: {port} pin {got!r} != {expect!r}")
+    for i, expect in enumerate(data_0_13):
+        port = f"ft_data[{i}]"
+        got = pins.get(port)
+        if got != expect:
+            err(f"{xdc.name}: {port} pin {got!r} != {expect!r}")
+
+
+def main() -> int:
+    hdl = ["hdl/pvla.v", "hdl/pvla_capture.v", "hdl/pvla_axi_lite.v"]
+    xdc = [
+        "xdc/ftplus_ft601_pt_alpha.xdc",
+        "xdc/ftplus_ft601_pt_v2.xdc",
+        "xdc/ftplus_ft601_timing.xdc",
+        "xdc/ftplus_ft601_impl.xdc",
+        "xdc/br_bank_a_8ch.xdc",
+    ]
+    meta = [
+        "component.xml",
+        "pvla_vivado_ip.tcl",
+        "xgui/pvla_v1_0.tcl",
+        "bd/bd.tcl",
+        "pvla_v1_0_upgrade.tcl",
+        "README.md",
+    ]
+    for rel in hdl + xdc + meta:
+        must_exist(IP / rel)
+
+    must_exist(PLAT / "tcl" / "pvla_bd_example.tcl")
+
+    la_rtl = [
+        "la_iddr1.v", "la_sampler.v", "la_pattern.v", "la_packer.v",
+        "la_trig.v", "la_circ_bram.v", "la_capture_ctrl.v", "la_ddr3_stub.v",
+    ]
+    ft_rtl = ["ft601_fwft_fifo.v", "ft601_sync_fifo.v", "ft601_reset.v"]
+    for name in la_rtl:
+        must_exist(PLAT / "rtl" / "la" / name)
+    for name in ft_rtl:
+        must_exist(PLAT / "rtl" / "ft601" / name)
+
+    top = (IP / "hdl" / "pvla.v").read_text()
+    for param in (
+        "C_NUM_CH", "C_SAMPLE_MHZ", "C_PRETRIG_SAMPLES", "C_PHY",
+        "C_BOARD", "C_HAS_AXI", "C_INCLUDE_BR_XDC",
+    ):
+        if f"parameter integer {param}" not in top:
+            err(f"pvla.v missing parameter {param}")
+    if "probe_i" not in top:
+        err("pvla.v missing probe_i")
+    if "s_axi_awaddr" not in top:
+        err("pvla.v missing AXI-lite")
+    if re.search(r"mig7|MIG7|ddr3_ui", top, re.I):
+        err("pvla.v must not instantiate MIG/DDR3")
+
+    cap = (IP / "hdl" / "pvla_capture.v").read_text()
+    if "C_PHY" not in cap or "ft601_sync_fifo" not in cap:
+        err("pvla_capture.v must wrap FT601 PHY")
+    if "m_axis_tdata" not in cap:
+        err("pvla_capture.v missing STREAM master")
+    if "la_capture_ctrl" not in cap:
+        err("pvla_capture.v must use existing la_capture_ctrl")
+
+    check_xdc_map(IP / "xdc" / "ftplus_ft601_pt_alpha.xdc", ALPHA_DATA_0_13)
+    check_xdc_map(IP / "xdc" / "ftplus_ft601_pt_v2.xdc", V2_DATA_0_13)
+
+    br = (IP / "xdc" / "br_bank_a_8ch.xdc").read_text()
+    if "probe_i[0]" not in br or "B13" not in br:
+        err("br_bank_a_8ch.xdc should constrain probe_i, not la_in")
+
+    xml = (IP / "component.xml").read_text()
+    for token in (
+        "greg676", "pvla", "C_NUM_CH", "probe_i",
+        "ftplus_ft601_pt_alpha.xdc", "ftplus_ft601_pt_v2.xdc",
+        "xgui/pvla_v1_0.tcl", "SCOPED_TO_REF",
+    ):
+        if token not in xml:
+            err(f"component.xml missing {token!r}")
+
+    gui = (IP / "xgui" / "pvla_v1_0.tcl").read_text()
+    for token in ("C_NUM_CH", "C_PHY", "C_BOARD", "init_gui"):
+        if token not in gui:
+            err(f"xgui missing {token}")
+
+    example = (PLAT / "tcl" / "pvla_bd_example.tcl").read_text()
+    code_lines = "\n".join(
+        ln for ln in example.splitlines() if not ln.lstrip().startswith("#")
+    )
+    if re.search(r"create_bd_net\s+", code_lines) and "ft_" in code_lines:
+        err("example BD must not create FT601 nets")
+    if "greg676:user:pvla:1.0" not in example:
+        err("example BD missing PVLA VLNV")
+    if "make_bd_pins_external -name probe_i" not in example:
+        err("example BD must export probe_i")
+    if re.search(r"create_bd_cell\s+-type\s+ip\s+.*mig", example, re.I):
+        err("example BD must not instantiate MIG")
+
+    pkg = (IP / "pvla_vivado_ip.tcl").read_text()
+    if "ipx::package_project" not in pkg:
+        err("packager must call ipx::package_project (NEORV32 pattern)")
+    if "scoped_to_ref" not in pkg:
+        err("packager must SCOPED_TO_REF XDCs")
+
+    if ERRORS:
+        print("PVLA IP check FAILED:")
+        for e in ERRORS:
+            print(f"  - {e}")
+        return 1
+    print("PVLA IP check PASS")
+    print(f"  IP dir : {IP}")
+    print(f"  VLNV   : greg676:user:pvla:1.0")
+    print(f"  XDC    : PT_ALPHA vs PT_V2 DATA[0:13] match pin map")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
