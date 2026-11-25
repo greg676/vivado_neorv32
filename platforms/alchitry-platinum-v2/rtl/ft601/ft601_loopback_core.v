@@ -37,7 +37,7 @@ module ft601_loopback_core #(
     wire        fifo_full_w;
     wire        fifo_almost_full;
     wire        fifo_empty_w;
-    wire [36-1:0] fifo_rdata;
+    wire [31:0] fifo_rdata;
     wire [9:0]  fifo_count;
 
     assign fifo_empty = fifo_empty_w;
@@ -53,7 +53,7 @@ module ft601_loopback_core #(
             assign fifo_full_w      = 1'b0;
             assign fifo_almost_full = 1'b0;
             assign fifo_empty_w     = 1'b1;
-            assign fifo_rdata       = 36'd0;
+            assign fifo_rdata       = 32'd0;
             assign fifo_count       = 10'd0;
 
             reg [31:0] counter;
@@ -70,14 +70,17 @@ module ft601_loopback_core #(
         end else begin : g_loopback
             assign rx_ready = !fifo_almost_full;
 
+            // 32-bit echo only. Do not replay captured BE: a sampled 0/Z on
+            // BE[i] would drop USB byte i (DATA[8*i+7:8*i]) and shift the
+            // host stream. Host tools always use 4-byte words.
             ft601_fwft_fifo #(
-                .WIDTH (36),
+                .WIDTH (32),
                 .DEPTH (512),
                 .ADDR_W(9)
             ) u_fifo (
                 .clk         (ft_clk),
                 .rst         (rst),
-                .wr_data     ({rx_be, rx_data}),
+                .wr_data     (rx_data),
                 .wr_en       (rx_valid),
                 .full        (fifo_full_w),
                 .almost_full (fifo_almost_full),
@@ -87,8 +90,8 @@ module ft601_loopback_core #(
                 .count       (fifo_count)
             );
 
-            assign tx_data  = fifo_rdata[31:0];
-            assign tx_be    = fifo_rdata[35:32];
+            assign tx_data  = fifo_rdata;
+            assign tx_be    = 4'hF;
             assign tx_valid = !fifo_empty_w;
         end
     endgenerate
