@@ -168,7 +168,7 @@ vivado -mode batch -source tcl/program_ram.tcl -tclargs \
 
 ### Host tools
 
-libusb-1.0 is the default hardware path. D3XX is optional.
+libusb-1.0 is the default hardware path: claim IF0+IF1, 20-byte session on EP 0x01, bulk OUT 0x02. D3XX is optional.
 
 ```bash
 make -C host/ft601-loopback selftest hw
@@ -185,10 +185,10 @@ When the Ft+ is plugged in:
 ./host/ft601-capture/ft601_capture --source 0 --edge rise --post 2048
 ```
 
-Optional D3XX on this bench (OpenClaw): **`/opt/ftdi/d3xx/libftd3xx.so`**. Header `ftd3xx.h` is **not** installed, so `make d3xx` cannot compile until a full SDK unpack. Python ctypes works with the `.so` alone:
+Optional D3XX: x86_64 OpenClaw **`/opt/ftdi/d3xx/libftd3xx.so`**. **aarch64** Jetson: `ftdichip.com` ARM tarballs 403; use `https://www.ftdichip.cn/Drivers/D3XX/Linux/libftd3xx-linux-arm-v8-1.0.16.tgz` → `~/ft601-host/d3xx/unpack/linux-arm-v8/`. Call `FT_SetTransferParams` then `FT_Create`; `FT_WritePipeEx` fifo **0**. Header `ftd3xx.h` is required for `make d3xx`. Python ctypes can load the `.so` alone:
 
 ```bash
-export FTD3XX_LIB=/opt/ftdi/d3xx/libftd3xx.so
+export FTD3XX_LIB=/opt/ftdi/d3xx/libftd3xx.so   # or the arm-v8 unpack
 python3 host/ft601-loopback/ft601_loopback.py --backend d3xx --bytes 16777216
 ```
 

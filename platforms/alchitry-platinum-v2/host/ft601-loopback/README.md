@@ -52,7 +52,7 @@ LEDs: `[0]` board-clk heartbeat, `[1]` `ft_clk` heartbeat (must blink — if not
 
 ## Host USB
 
-libusb talks bulk IN/OUT to VID `0403` PID `601f`. The Ft+ EEPROM is already 245 FIFO, 32-bit — no D3XX session is required.
+libusb talks to VID `0403` PID `601f`. **Claim IF0 and IF1.** Send a 20-byte session-list command on EP **0x01**, then bulk data on EP **0x02** / **0x82**. EEPROM is already 245 FIFO 32-bit (1 channel). On jetson-edge that path wrote **13312 bytes** (`4+1024+4096+8192`, `rc=0`) after a USB device reset. Do **not** use vendor abort `0x40/0x00` (pipe error). No flash.
 
 ```bash
 make selftest                 # no board, no USB
@@ -77,23 +77,25 @@ SUBSYSTEM=="usb", ATTR{idVendor}=="0403", ATTR{idProduct}=="601f", MODE="0666"
 
 Do **not** bind `ftdi_sio` to the FT601. The on-board FTDI UART (console) is a different interface — leave it alone. Do not unbind the Pt V2 USB-UART (that resets the FPGA).
 
-### Optional D3XX
+### Optional D3XX / aarch64 (Jetson)
 
-OpenClaw already unpacked the Linux libraries on this bench:
+`ftdichip.com` ARM tarballs **403**. Use the China mirror, **1.0.16**, ELF aarch64:
 
-| | |
-|---|---|
-| Library | **`/opt/ftdi/d3xx/libftd3xx.so`** (also `libftd3xx_32.so`) |
-| Header | **not installed** — `ftd3xx.h` is missing, so `make d3xx` cannot compile |
+```
+https://www.ftdichip.cn/Drivers/D3XX/Linux/libftd3xx-linux-arm-v8-1.0.16.tgz
+```
 
-Python ctypes can load the `.so` without the header:
+On jetson-edge the unpack is `~/ft601-host/d3xx/unpack/linux-arm-v8/` (`libftd3xx.so` + `ftd3xx.h`). x86_64 OpenClaw bench still has `/opt/ftdi/d3xx/libftd3xx.so` (header often missing → `make d3xx` fails).
+
+Linux D3XX (FTDI `rw.c`): `FT_SetTransferParams` with `fNonThreadSafeTransfer`, then `FT_Create(0, FT_OPEN_BY_INDEX, …)`. `FT_WritePipeEx` / `FT_ReadPipeEx` use **fifo id 0**, not pipe `0x02`. First `FT_Create` can fail (`st=2/3`) while SuperSpeed is wedged; `libusb_reset_device` unwedged it on Jetson. After reset, D3XX wrote **4 bytes** then timed out (`19`) on 1024+; libusb session+OUT is the reliable host path.
 
 ```bash
-export FTD3XX_LIB=/opt/ftdi/d3xx/libftd3xx.so
+export FTD3XX_LIB=$HOME/ft601-host/d3xx/unpack/linux-arm-v8/libftd3xx.so
+# or x86: export FTD3XX_LIB=/opt/ftdi/d3xx/libftd3xx.so
 python3 ft601_loopback.py --backend d3xx --bytes 16777216
 ```
 
-To compile the C D3XX binary, unpack the full Linux SDK (need `ftd3xx.h` **and** `libftd3xx.so`) into `/opt/ftdi/d3xx`, then `make d3xx`. Download: https://ftdichip.com/drivers/d3xx-driver/
+To compile the C D3XX binary, point `D3XX_DIR` at a full SDK unpack (`ftd3xx.h` **and** `libftd3xx.so`), then `make d3xx`.
 
 ## Build / run
 
