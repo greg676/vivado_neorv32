@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 /*
  * FT601 USB transport.
  *
@@ -18,6 +19,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
+#include <libusb.h>
 
 #define FT601_VID 0x0403
 #define FT601_PID 0x601f
@@ -25,6 +29,24 @@
 #define PIPE_IN   0x82
 #define EP_SESSION 0x01
 #define FIFO_CH0  0
+/* Jetson: 65536-byte URB times out; first 16 KiB D3XX write after reset is OK. */
+#define FT601_MAX_XFER 16384u
+
+static void ft601_bus_reset(void)
+{
+    libusb_context *ctx = NULL;
+    libusb_device_handle *h;
+
+    if (libusb_init(&ctx) != 0)
+        return;
+    h = libusb_open_device_with_vid_pid(ctx, FT601_VID, FT601_PID);
+    if (h) {
+        libusb_reset_device(h);
+        libusb_close(h);
+    }
+    libusb_exit(ctx);
+    sleep(1);
+}
 
 static void set_err(char *err, size_t errlen, const char *msg)
 {
@@ -75,6 +97,7 @@ ft601_dev *ft601_open(int index, unsigned timeout_ms, char *err, size_t errlen)
         return NULL;
     }
     d->timeout_ms = timeout_ms ? timeout_ms : 5000;
+    ft601_bus_reset();
     /* Linux D3XX: params before FT_Create, matching FTDI rw.c / streamer. */
     d3xx_set_transfer_params();
     st = FT_Create((PVOID)(uintptr_t)index, FT_OPEN_BY_INDEX, &d->handle);
@@ -100,35 +123,55 @@ void ft601_close(ft601_dev *d)
 
 int ft601_write(ft601_dev *d, const void *buf, size_t n, size_t *xferred)
 {
-    ULONG got = 0;
-    FT_STATUS st;
+    const unsigned char *p = (const unsigned char *)buf;
+    size_t done = 0;
 
     if (xferred)
         *xferred = 0;
-    st = FT_WritePipeEx(d->handle, FIFO_CH0, (PUCHAR)buf, (ULONG)n, &got,
-                        d->timeout_ms);
+    while (done < n) {
+        ULONG got = 0;
+        ULONG want = (ULONG)((n - done) > FT601_MAX_XFER ? FT601_MAX_XFER
+                                                         : (n - done));
+        FT_STATUS st = FT_WritePipeEx(d->handle, FIFO_CH0, (PUCHAR)(p + done),
+                                      want, &got, d->timeout_ms);
+        done += (size_t)got;
+        if (st != FT_OK || got != want) {
+            if (xferred)
+                *xferred = done;
+            return -1;
+        }
+    }
     if (xferred)
-        *xferred = (size_t)got;
-    return (st == FT_OK && got == (ULONG)n) ? 0 : -1;
+        *xferred = done;
+    return 0;
 }
 
 int ft601_read(ft601_dev *d, void *buf, size_t n, size_t *xferred)
 {
-    ULONG got = 0;
-    FT_STATUS st;
+    unsigned char *p = (unsigned char *)buf;
+    size_t done = 0;
 
     if (xferred)
         *xferred = 0;
-    st = FT_ReadPipeEx(d->handle, FIFO_CH0, (PUCHAR)buf, (ULONG)n, &got,
-                       d->timeout_ms);
+    while (done < n) {
+        ULONG got = 0;
+        ULONG want = (ULONG)((n - done) > FT601_MAX_XFER ? FT601_MAX_XFER
+                                                         : (n - done));
+        FT_STATUS st = FT_ReadPipeEx(d->handle, FIFO_CH0, p + done, want, &got,
+                                     d->timeout_ms);
+        done += (size_t)got;
+        if (st != FT_OK || got != want) {
+            if (xferred)
+                *xferred = done;
+            return -1;
+        }
+    }
     if (xferred)
-        *xferred = (size_t)got;
-    return (st == FT_OK && got == (ULONG)n) ? 0 : -1;
+        *xferred = done;
+    return 0;
 }
 
 #else /* libusb */
-
-#include <libusb.h>
 
 struct ft601_dev {
     libusb_context *ctx;
@@ -207,6 +250,7 @@ ft601_dev *ft601_open(int index, unsigned timeout_ms, char *err, size_t errlen)
         return NULL;
     }
     d->timeout_ms = timeout_ms ? timeout_ms : 5000;
+    ft601_bus_reset();
 
     rc = libusb_init(&d->ctx);
     if (rc != 0) {
@@ -288,26 +332,42 @@ int ft601_write(ft601_dev *d, const void *buf, size_t n, size_t *xferred)
 
     if (xferred)
         *xferred = 0;
-    if (session_list(d, d->ep_out, (uint32_t)n) != 0)
-        return -1;
     while (done < n) {
-        int got = 0;
-        int rc = libusb_bulk_transfer(d->handle, d->ep_out,
-                                      (unsigned char *)(p + done),
-                                      (int)(n - done), &got, d->timeout_ms);
-        if (got > 0)
-            done += (size_t)got;
-        if (rc != 0) {
+        size_t want = n - done;
+        size_t chunk_done = 0;
+        if (want > FT601_MAX_XFER)
+            want = FT601_MAX_XFER;
+        if (session_list(d, d->ep_out, (uint32_t)want) != 0) {
             if (xferred)
                 *xferred = done;
             return -1;
         }
-        if (got == 0)
-            break;
+        while (chunk_done < want) {
+            int got = 0;
+            int rc = libusb_bulk_transfer(d->handle, d->ep_out,
+                                          (unsigned char *)(p + done + chunk_done),
+                                          (int)(want - chunk_done), &got,
+                                          d->timeout_ms);
+            if (got > 0)
+                chunk_done += (size_t)got;
+            if (rc != 0) {
+                if (xferred)
+                    *xferred = done + chunk_done;
+                return -1;
+            }
+            if (got == 0)
+                break;
+        }
+        done += chunk_done;
+        if (chunk_done != want) {
+            if (xferred)
+                *xferred = done;
+            return -1;
+        }
     }
     if (xferred)
         *xferred = done;
-    return (done == n) ? 0 : -1;
+    return 0;
 }
 
 int ft601_read(ft601_dev *d, void *buf, size_t n, size_t *xferred)
@@ -317,25 +377,42 @@ int ft601_read(ft601_dev *d, void *buf, size_t n, size_t *xferred)
 
     if (xferred)
         *xferred = 0;
-    if (session_list(d, d->ep_in, (uint32_t)n) != 0)
-        return -1;
     while (done < n) {
-        int got = 0;
-        int rc = libusb_bulk_transfer(d->handle, d->ep_in, p + done,
-                                      (int)(n - done), &got, d->timeout_ms);
-        if (got > 0)
-            done += (size_t)got;
-        if (rc != 0) {
+        size_t want = n - done;
+        size_t chunk_done = 0;
+        if (want > FT601_MAX_XFER)
+            want = FT601_MAX_XFER;
+        if (session_list(d, d->ep_in, (uint32_t)want) != 0) {
             if (xferred)
                 *xferred = done;
             return -1;
         }
-        if (got == 0)
-            break;
+        while (chunk_done < want) {
+            int got = 0;
+            int rc = libusb_bulk_transfer(d->handle, d->ep_in,
+                                          p + done + chunk_done,
+                                          (int)(want - chunk_done), &got,
+                                          d->timeout_ms);
+            if (got > 0)
+                chunk_done += (size_t)got;
+            if (rc != 0) {
+                if (xferred)
+                    *xferred = done + chunk_done;
+                return -1;
+            }
+            if (got == 0)
+                break;
+        }
+        done += chunk_done;
+        if (chunk_done != want) {
+            if (xferred)
+                *xferred = done;
+            return -1;
+        }
     }
     if (xferred)
         *xferred = done;
-    return (done == n) ? 0 : -1;
+    return 0;
 }
 
 #endif

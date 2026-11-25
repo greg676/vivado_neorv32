@@ -99,7 +99,8 @@ def run_hw(args: argparse.Namespace) -> int:
         return 2
 
     nwords = args.bytes // WORD
-    chunk = min(16 * 1024, nwords)
+    chunk_bytes = args.chunk_bytes if args.chunk_bytes else 16384
+    chunk = min(chunk_bytes // WORD, nwords)
     next_idx = 0
     bytes_done = 0
     words_ok = 0
@@ -185,6 +186,7 @@ def main() -> int:
     p.add_argument("--bytes", type=int, default=16 * 1024 * 1024)
     p.add_argument("--index", type=int, default=0)
     p.add_argument("--timeout-ms", type=int, default=5000)
+    p.add_argument("--chunk-bytes", type=int, default=16384)
     p.add_argument("--tx-only", action="store_true")
     p.add_argument("--backend", choices=("auto", "libusb", "d3xx"), default="auto")
     p.add_argument("--self-test", action="store_true")
