@@ -38,6 +38,8 @@ module la_capture_top #(
 
     wire rst_ft;
 
+    // Shared Lucid-style ft_reset (button only). Capture is still 8-ch LA;
+    // USB drain policy is the same as 32-bit 245 loopback.
     ft601_reset #(
         .HOLD_CYCLES(100000)
     ) u_reset (

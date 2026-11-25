@@ -39,7 +39,7 @@ Probe ports stay on the canvas for you to wire. Optional **Include Br Bank A pro
 
 **FT601 (`C_PHY=0`) — auto-promoted, IP XDC, not BD clutter**
 
-- `clk`, `rst_n` — board clock for the PHY reset sequencer
+- `clk`, `rst_n` — board clock and Pt button (`ft_reset = rst_n` after 2 flops; no post-DONE RESET_N pulse)
 - `ft_clk`, `ft_data[31:0]`, `ft_be[3:0]`, `ft_rxf`, `ft_txe`, `ft_oe`, `ft_rd`, `ft_wr`, `ft_reset`, `ft_wakeup`
 
 **STREAM (`C_PHY=1`)**

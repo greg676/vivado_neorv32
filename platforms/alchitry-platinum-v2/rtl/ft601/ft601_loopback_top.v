@@ -1,7 +1,6 @@
 `timescale 1ns / 1ps
-// Dedicated FT601 USB3 loopback top for Alchitry Pt V2 + Ft+.
-// Does not instantiate NeoRV32. Load this bitstream instead of the SoC
-// bitstream when running the host loopback tool.
+// Dedicated FT601 USB3 32-bit 245 echo top for Alchitry Pt V2 + Ft+.
+// Not a multi-channel LA. Does not instantiate NeoRV32.
 //
 // MODE: "LOOPBACK" (default) or "TX_COUNTER" (set from TCL).
 module ft601_loopback_top #(
@@ -64,6 +63,7 @@ module ft601_loopback_top #(
     );
 
     // Heartbeats: board clock and FT601 clock, so a missing ft_clk is obvious.
+    // LED[2] is ~RXF (data available): clock blinks do not change on bulk OUT.
     reg [24:0] blink_board;
     reg [24:0] blink_ft;
     always @(posedge clk)
@@ -73,7 +73,7 @@ module ft601_loopback_top #(
 
     assign led[0] = blink_board[24];
     assign led[1] = blink_ft[24];
-    assign led[2] = ~rst_ft;
+    assign led[2] = ~ft_rxf;
     assign led[3] = ~fifo_empty;
     assign led[4] = fifo_full;
     assign led[5] = rx_active;

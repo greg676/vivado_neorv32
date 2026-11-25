@@ -24,7 +24,7 @@ module pvla #(
     parameter integer C_S_AXI_ADDR_WIDTH = 8,
     parameter integer C_S_AXI_DATA_WIDTH = 32
 ) (
-    // Board / fabric clock — FT601 reset sequencer (ft_clk is off in reset)
+    // Board clock: button → ft_reset (Lucid-style). Not a sample clock.
     input  wire                        clk,
     input  wire                        rst_n,
 
