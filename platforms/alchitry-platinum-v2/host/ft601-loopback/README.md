@@ -60,6 +60,15 @@ make hw                       # libusb binary: ./ft601_loopback
 sudo apt install libusb-1.0-0-dev   # if the compile cannot find libusb.h
 ```
 
+Sim gold (Icarus, no flash) lives in `../../sim/ft601/vectors/*.bin`. Replay on hardware:
+
+```bash
+python3 ft601_loopback.py --vector ../../sim/ft601/vectors/counter.bin --bytes 256
+# or: ./ft601_loopback --vector ../../sim/ft601/vectors/walking.bin --bytes 256
+```
+
+See `../../sim/ft601/README.md`.
+
 Linux udev (once): allow unprivileged access to the FT601. Example:
 
 ```

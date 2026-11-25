@@ -1,0 +1,3 @@
+*.vvp
+*.vcd
+vectors/sim_echo.bin

@@ -26,6 +26,13 @@ def pattern_word(idx: int) -> int:
     return idx & 0xFFFFFFFF
 
 
+def load_vector(path: str) -> List[int]:
+    raw = open(path, "rb").read()
+    if len(raw) < WORD or len(raw) % WORD:
+        raise ValueError(f"{path}: length {len(raw)} is not a positive multiple of 4")
+    return bytes_to_words(raw)
+
+
 def verify_words(got: List[int], start_idx: int) -> Tuple[int, int, Optional[Tuple[int, int, int]]]:
     ok = 0
     bad = 0
@@ -55,6 +62,15 @@ def self_test() -> int:
               file=sys.stderr)
         return 1
     print("self-test PASS (matcher fails closed on bit-swap and drop)")
+
+    vec_dir = os.path.join(os.path.dirname(__file__), "..", "..", "sim", "ft601", "vectors")
+    gold = os.path.join(vec_dir, "counter.bin")
+    if os.path.isfile(gold):
+        words = load_vector(gold)
+        if words[:8] != [pattern_word(i) for i in range(8)]:
+            print(f"self-test: {gold} does not match pattern_word", file=sys.stderr)
+            return 1
+        print(f"self-test PASS (sim vector {gold} matches host pattern)")
     return 0
 
 
@@ -67,6 +83,14 @@ def bytes_to_words(buf: bytes) -> List[int]:
 
 
 def run_hw(args: argparse.Namespace) -> int:
+    vec: Optional[List[int]] = None
+    if args.vector:
+        try:
+            vec = load_vector(args.vector)
+        except (OSError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
     try:
         dev = open_ft601(index=args.index, timeout_ms=args.timeout_ms,
                          backend=args.backend)
@@ -89,7 +113,10 @@ def run_hw(args: argparse.Namespace) -> int:
             this = min(chunk, (args.bytes - bytes_done) // WORD)
 
             if not args.tx_only:
-                payload = words_to_bytes([pattern_word(next_idx + i) for i in range(this)])
+                if vec:
+                    payload = words_to_bytes([vec[(next_idx + i) % len(vec)] for i in range(this)])
+                else:
+                    payload = words_to_bytes([pattern_word(next_idx + i) for i in range(this)])
                 try:
                     dev.write(payload)
                 except RuntimeError as exc:
@@ -108,7 +135,19 @@ def run_hw(args: argparse.Namespace) -> int:
                 odd_bytes += n % WORD
                 break
             got = bytes_to_words(raw)
-            ok, bad, first = verify_words(got, next_idx)
+            if vec:
+                ok = bad = 0
+                first = None
+                for i, value in enumerate(got):
+                    exp = vec[(next_idx + i) % len(vec)]
+                    if value == exp:
+                        ok += 1
+                    else:
+                        if first is None:
+                            first = (next_idx + i, value, exp)
+                        bad += 1
+            else:
+                ok, bad, first = verify_words(got, next_idx)
             words_ok += ok
             words_bad += bad
             if first_bad is None:
@@ -149,6 +188,7 @@ def main() -> int:
     p.add_argument("--tx-only", action="store_true")
     p.add_argument("--backend", choices=("auto", "libusb", "d3xx"), default="auto")
     p.add_argument("--self-test", action="store_true")
+    p.add_argument("--vector", help="LE 32-bit .bin from sim/ft601/vectors (host reuses sim gold)")
     args = p.parse_args()
     if args.self_test:
         return self_test()

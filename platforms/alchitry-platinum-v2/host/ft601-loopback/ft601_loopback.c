@@ -129,9 +129,49 @@ static void usage(const char *argv0)
             "  --index N       FT601 index if several 0403:601f (default 0)\n"
             "  --tx-only       read-only; expect FPGA TX_COUNTER bitstream\n"
             "  --timeout-ms N  pipe timeout (default 5000)\n"
+            "  --vector PATH   LE 32-bit .bin from sim/ft601/vectors\n"
             "  --self-test     no hardware; test the matcher\n"
             "  --help\n",
             argv0);
+}
+
+static int load_vector_file(const char *path, uint32_t **out, size_t *nwords)
+{
+    FILE *f = fopen(path, "rb");
+    long sz;
+    uint32_t *buf;
+    size_t n, got;
+
+    if (!f) {
+        fprintf(stderr, "error: cannot open %s: %s\n", path, strerror(errno));
+        return -1;
+    }
+    if (fseek(f, 0, SEEK_END) != 0) {
+        fclose(f);
+        return -1;
+    }
+    sz = ftell(f);
+    rewind(f);
+    if (sz < (long)WORD_SIZE || (sz % (long)WORD_SIZE) != 0) {
+        fprintf(stderr, "error: %s length %ld is not a multiple of 4\n", path, sz);
+        fclose(f);
+        return -1;
+    }
+    n = (size_t)sz / WORD_SIZE;
+    buf = (uint32_t *)malloc((size_t)sz);
+    if (!buf) {
+        fclose(f);
+        return -1;
+    }
+    got = fread(buf, 1, (size_t)sz, f);
+    fclose(f);
+    if (got != (size_t)sz) {
+        free(buf);
+        return -1;
+    }
+    *out = buf;
+    *nwords = n;
+    return 0;
 }
 
 int main(int argc, char **argv)
@@ -140,6 +180,9 @@ int main(int argc, char **argv)
     int index = 0;
     unsigned timeout_ms = 5000;
     int tx_only = 0;
+    const char *vector_path = NULL;
+    uint32_t *vector = NULL;
+    size_t vector_n = 0;
     int i;
     ft601_dev *dev = NULL;
     char err[256];
@@ -161,6 +204,8 @@ int main(int argc, char **argv)
             timeout_ms = (unsigned)strtoul(argv[++i], NULL, 0);
         } else if (strcmp(argv[i], "--tx-only") == 0) {
             tx_only = 1;
+        } else if ((strcmp(argv[i], "--vector") == 0) && i + 1 < argc) {
+            vector_path = argv[++i];
         } else if (strcmp(argv[i], "--self-test") == 0 ||
                    strcmp(argv[i], "-t") == 0) {
             return run_self_test();
@@ -177,6 +222,12 @@ int main(int argc, char **argv)
         fprintf(stderr, "error: --bytes must be a positive multiple of 4\n");
         return 2;
     }
+    if (vector_path) {
+        if (load_vector_file(vector_path, &vector, &vector_n) != 0)
+            return 2;
+        printf("vector      : %s (%zu words, repeating)\n", vector_path, vector_n);
+    }
+
     nwords = (size_t)(nbytes / WORD_SIZE);
     if (chunk_words > nwords)
         chunk_words = nwords;
@@ -193,6 +244,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "error: %s\n", err);
         free(tx);
         free(rx);
+        free(vector);
         return 1;
     }
     printf("FT601 backend : %s\n", ft601_backend_name());
@@ -211,7 +263,8 @@ int main(int argc, char **argv)
 
         if (!tx_only) {
             for (w = 0; w < this_words; w++)
-                tx[w] = pattern_word(next_idx + w);
+                tx[w] = vector ? vector[(next_idx + w) % vector_n]
+                               : pattern_word(next_idx + w);
             xferred = 0;
             if (ft601_write(dev, tx, this_words * WORD_SIZE, &xferred) != 0 ||
                 xferred != this_words * WORD_SIZE) {
@@ -246,7 +299,24 @@ int main(int argc, char **argv)
 
         {
             size_t got_words = (size_t)xferred / WORD_SIZE;
-            verify_words(rx, got_words, next_idx, &vs);
+            if (vector) {
+                size_t gi;
+                for (gi = 0; gi < got_words; gi++) {
+                    uint32_t exp = vector[(next_idx + gi) % vector_n];
+                    if (rx[gi] == exp) {
+                        vs.words_ok++;
+                    } else {
+                        if (vs.words_bad == 0) {
+                            vs.first_bad_index = next_idx + gi;
+                            vs.first_bad_got = rx[gi];
+                            vs.first_bad_exp = exp;
+                        }
+                        vs.words_bad++;
+                    }
+                }
+            } else {
+                verify_words(rx, got_words, next_idx, &vs);
+            }
             if (got_words != this_words)
                 vs.words_bad += (this_words - got_words);
             next_idx += this_words;
@@ -258,6 +328,7 @@ int main(int argc, char **argv)
     ft601_close(dev);
     free(tx);
     free(rx);
+    free(vector);
 
     {
         double dt = t1 - t0;
