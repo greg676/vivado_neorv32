@@ -129,6 +129,7 @@ static void usage(const char *argv0)
             "  --index N       FT601 index if several 0403:601f (default 0)\n"
             "  --tx-only       read-only; expect FPGA TX_COUNTER bitstream\n"
             "  --timeout-ms N  pipe timeout (default 5000)\n"
+            "  --chunk-bytes N host URB size (default 16384; 65536 times out on Jetson)\n"
             "  --vector PATH   LE 32-bit .bin from sim/ft601/vectors\n"
             "  --self-test     no hardware; test the matcher\n"
             "  --help\n",
@@ -189,7 +190,7 @@ int main(int argc, char **argv)
     uint32_t *tx = NULL;
     uint32_t *rx = NULL;
     size_t nwords;
-    size_t chunk_words = 16u * 1024u;
+    size_t chunk_words = 4096u; /* 16384 bytes; 64 KiB URBs time out on Jetson */
     verify_stats vs;
     uint64_t next_idx = 0;
     uint64_t bytes_done = 0;
@@ -202,6 +203,13 @@ int main(int argc, char **argv)
             index = (int)strtol(argv[++i], NULL, 0);
         } else if ((strcmp(argv[i], "--timeout-ms") == 0) && i + 1 < argc) {
             timeout_ms = (unsigned)strtoul(argv[++i], NULL, 0);
+        } else if ((strcmp(argv[i], "--chunk-bytes") == 0) && i + 1 < argc) {
+            unsigned long cb = strtoul(argv[++i], NULL, 0);
+            if (cb < WORD_SIZE || (cb % WORD_SIZE) != 0) {
+                fprintf(stderr, "error: --chunk-bytes must be a multiple of 4\n");
+                return 2;
+            }
+            chunk_words = (size_t)(cb / WORD_SIZE);
         } else if (strcmp(argv[i], "--tx-only") == 0) {
             tx_only = 1;
         } else if ((strcmp(argv[i], "--vector") == 0) && i + 1 < argc) {

@@ -87,7 +87,7 @@ https://www.ftdichip.cn/Drivers/D3XX/Linux/libftd3xx-linux-arm-v8-1.0.16.tgz
 
 On jetson-edge the unpack is `~/ft601-host/d3xx/unpack/linux-arm-v8/` (`libftd3xx.so` + `ftd3xx.h`). x86_64 OpenClaw bench still has `/opt/ftdi/d3xx/libftd3xx.so` (header often missing → `make d3xx` fails).
 
-Linux D3XX (FTDI `rw.c`): `FT_SetTransferParams` with `fNonThreadSafeTransfer`, then `FT_Create(0, FT_OPEN_BY_INDEX, …)`. `FT_WritePipeEx` / `FT_ReadPipeEx` use **fifo id 0**, not pipe `0x02`. First `FT_Create` can fail (`st=2/3`) while SuperSpeed is wedged; `libusb_reset_device` unwedged it on Jetson. After reset, D3XX wrote **4 bytes** then timed out (`19`) on 1024+; libusb session+OUT is the reliable host path.
+Linux D3XX (FTDI `rw.c`): `FT_SetTransferParams` with `fNonThreadSafeTransfer`, then `FT_Create(0, FT_OPEN_BY_INDEX, …)`. `FT_WritePipeEx` / `FT_ReadPipeEx` use **fifo id 0**, not pipe `0x02`. Host open does `libusb_reset_device` first. **Do not use 64 KiB URBs** — Jetson times out; cap is **16384** (`--chunk-bytes`). After reset, D3XX tx-only **4+1024+4096+8192+16384 = 29700**. First 16 KiB W+R OK; 32 KiB+ short. Repeating toward 16 MiB fills the chip FIFO (~45 KiB) if the FPGA does not drain.
 
 ```bash
 export FTD3XX_LIB=$HOME/ft601-host/d3xx/unpack/linux-arm-v8/libftd3xx.so
@@ -104,7 +104,7 @@ make selftest
 python3 ft601_loopback.py --self-test
 
 make hw
-./ft601_loopback --bytes 16777216
+./ft601_loopback --bytes 16777216 --chunk-bytes 16384
 # or
 python3 ft601_loopback.py --bytes 16777216          # libusb first
 python3 ft601_loopback.py --backend d3xx --bytes 16777216
@@ -117,6 +117,7 @@ python3 ft601_loopback.py --backend d3xx --bytes 16777216
 | `--backend auto\|libusb\|d3xx` | Python only. Default `auto` = libusb then D3XX. |
 | `--tx-only` | Read-only; needs `TX_COUNTER` bitstream. |
 | `--timeout-ms N` | Pipe timeout. |
+| `--chunk-bytes N` | Host URB size, multiple of 4. Default **16384**. |
 | `--self-test` | No hardware. |
 
 Exit `0` is PASS. Any mismatch, short/odd transfer, or incomplete byte count is FAIL (exit `1`).

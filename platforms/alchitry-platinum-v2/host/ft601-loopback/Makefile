@@ -36,9 +36,9 @@ ft601_loopback_d3xx: ft601_loopback.c $(USB_DIR)/ft601_usb.c $(USB_DIR)/ft601_us
 	  echo "D3XX headers missing. Unpack the FTDI Linux D3XX SDK to $(D3XX_DIR)"; \
 	  echo "(need ftd3xx.h and libftd3xx.so — the .so alone is not enough)."; \
 	  exit 1; }
-	$(CC) $(CFLAGS) -DFT601_USE_D3XX -I$(USB_DIR) -I$(D3XX_DIR) -o $@ \
+	$(CC) $(CFLAGS) -DFT601_USE_D3XX -I$(USB_DIR) -I$(D3XX_DIR) $(USB_CFLAGS) -o $@ \
 		ft601_loopback.c $(USB_DIR)/ft601_usb.c \
-		-L$(D3XX_DIR) -lftd3xx -lpthread -ldl
+		-L$(D3XX_DIR) -lftd3xx -lpthread -ldl $(USB_LIBS)
 
 selftest: ft601_loopback_selftest
 	./ft601_loopback_selftest --self-test

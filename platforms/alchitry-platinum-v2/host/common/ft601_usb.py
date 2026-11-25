@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import time
 from ctypes import (
     POINTER,
     Structure,
@@ -28,6 +29,7 @@ PIPE_OUT = 0x02
 PIPE_IN = 0x82
 EP_SESSION = 0x01
 FIFO_CH0 = 0
+MAX_XFER = 16384
 FT_OK = 0
 FT_OPEN_BY_INDEX = 0x00000010
 FT_PIPE_DIR_IN = 0
@@ -163,6 +165,10 @@ def _load_libusb() -> ctypes.CDLL:
     lib.libusb_open.argtypes = [c_void_p, POINTER(c_void_p)]
     lib.libusb_open.restype = c_int
     lib.libusb_close.argtypes = [c_void_p]
+    lib.libusb_open_device_with_vid_pid.argtypes = [c_void_p, c_uint16, c_uint16]
+    lib.libusb_open_device_with_vid_pid.restype = c_void_p
+    lib.libusb_reset_device.argtypes = [c_void_p]
+    lib.libusb_reset_device.restype = c_int
     lib.libusb_set_auto_detach_kernel_driver.argtypes = [c_void_p, c_int]
     lib.libusb_claim_interface.argtypes = [c_void_p, c_int]
     lib.libusb_claim_interface.restype = c_int
@@ -183,6 +189,19 @@ def _load_libusb() -> ctypes.CDLL:
     return lib
 
 
+def _bus_reset() -> None:
+    lib = _load_libusb()
+    ctx = c_void_p()
+    if lib.libusb_init(byref(ctx)) != 0:
+        return
+    h = lib.libusb_open_device_with_vid_pid(ctx, FT601_VID, FT601_PID)
+    if h:
+        lib.libusb_reset_device(h)
+        lib.libusb_close(h)
+    lib.libusb_exit(ctx)
+    time.sleep(1.2)
+
+
 class Ft601Libusb:
     name = "libusb"
 
@@ -196,6 +215,7 @@ class Ft601Libusb:
         self.ep_out = PIPE_OUT
         self.ep_in = PIPE_IN
         self.timeout_ms = timeout_ms
+        _bus_reset()
         rc = self.lib.libusb_init(byref(self.ctx))
         if rc != 0:
             raise RuntimeError(f"libusb_init failed ({rc})")
@@ -275,45 +295,56 @@ class Ft601Libusb:
             self.ctx = c_void_p()
 
     def write(self, data: bytes) -> int:
-        self._session(self.ep_out, len(data))
         done = 0
         while done < len(data):
-            chunk = data[done:]
-            buf = ctypes.create_string_buffer(chunk, len(chunk))
-            got = c_int(0)
-            rc = self.lib.libusb_bulk_transfer(
-                self.handle, c_uint8(self.ep_out), buf, len(chunk),
-                byref(got), self.timeout_ms,
-            )
-            if got.value > 0:
-                done += int(got.value)
-            if rc != 0:
-                raise RuntimeError(f"libusb bulk OUT {rc} ({done} of {len(data)})")
-            if got.value == 0:
-                break
-        if done != len(data):
-            raise RuntimeError(f"short write {done} of {len(data)}")
+            want = min(MAX_XFER, len(data) - done)
+            self._session(self.ep_out, want)
+            chunk_done = 0
+            while chunk_done < want:
+                chunk = data[done + chunk_done : done + want]
+                buf = ctypes.create_string_buffer(chunk, len(chunk))
+                got = c_int(0)
+                rc = self.lib.libusb_bulk_transfer(
+                    self.handle, c_uint8(self.ep_out), buf, len(chunk),
+                    byref(got), self.timeout_ms,
+                )
+                if got.value > 0:
+                    chunk_done += int(got.value)
+                if rc != 0:
+                    raise RuntimeError(
+                        f"libusb bulk OUT {rc} ({done + chunk_done} of {len(data)})"
+                    )
+                if got.value == 0:
+                    break
+            done += chunk_done
+            if chunk_done != want:
+                raise RuntimeError(f"short write {done} of {len(data)}")
         return done
 
     def read(self, nbytes: int) -> bytes:
-        self._session(self.ep_in, nbytes)
         out = bytearray()
         while len(out) < nbytes:
-            want = nbytes - len(out)
-            buf = ctypes.create_string_buffer(want)
-            got = c_int(0)
-            rc = self.lib.libusb_bulk_transfer(
-                self.handle, c_uint8(self.ep_in), buf, want,
-                byref(got), self.timeout_ms,
-            )
-            if got.value > 0:
-                out += buf.raw[: int(got.value)]
-            if rc != 0:
-                raise RuntimeError(f"libusb bulk IN {rc} ({len(out)} of {nbytes})")
-            if got.value == 0:
-                break
-        if len(out) != nbytes:
-            raise RuntimeError(f"short read {len(out)} of {nbytes}")
+            want = min(MAX_XFER, nbytes - len(out))
+            self._session(self.ep_in, want)
+            chunk = bytearray()
+            while len(chunk) < want:
+                buf = ctypes.create_string_buffer(want - len(chunk))
+                got = c_int(0)
+                rc = self.lib.libusb_bulk_transfer(
+                    self.handle, c_uint8(self.ep_in), buf, want - len(chunk),
+                    byref(got), self.timeout_ms,
+                )
+                if got.value > 0:
+                    chunk += buf.raw[: int(got.value)]
+                if rc != 0:
+                    raise RuntimeError(
+                        f"libusb bulk IN {rc} ({len(out) + len(chunk)} of {nbytes})"
+                    )
+                if got.value == 0:
+                    break
+            out += chunk
+            if len(chunk) != want:
+                raise RuntimeError(f"short read {len(out)} of {nbytes}")
         return bytes(out)
 
 
@@ -361,6 +392,7 @@ class Ft601D3xx:
         self.lib = lib
         self.handle = c_void_p()
         self.timeout_ms = timeout_ms
+        _bus_reset()
         conf = _FT_TRANSFER_CONF()
         conf.wStructSize = ctypes.sizeof(_FT_TRANSFER_CONF)
         conf.pipe[FT_PIPE_DIR_IN].fNonThreadSafeTransfer = 1
@@ -379,23 +411,35 @@ class Ft601D3xx:
             self.handle = c_void_p()
 
     def write(self, data: bytes) -> int:
-        xferred = c_ulong(0)
-        st = self.lib.FT_WritePipeEx(self.handle, FIFO_CH0, data, len(data),
-                                     byref(xferred), self.timeout_ms)
-        if st != FT_OK or xferred.value != len(data):
-            raise RuntimeError(f"FT_WritePipeEx {st} ({xferred.value} of {len(data)})")
-        return int(xferred.value)
+        done = 0
+        while done < len(data):
+            want = min(MAX_XFER, len(data) - done)
+            xferred = c_ulong(0)
+            chunk = data[done : done + want]
+            st = self.lib.FT_WritePipeEx(
+                self.handle, FIFO_CH0, chunk, want, byref(xferred), self.timeout_ms
+            )
+            done += int(xferred.value)
+            if st != FT_OK or xferred.value != want:
+                raise RuntimeError(
+                    f"FT_WritePipeEx {st} ({done} of {len(data)})"
+                )
+        return done
 
     def read(self, nbytes: int) -> bytes:
-        rx = ctypes.create_string_buffer(nbytes)
-        xferred = c_ulong(0)
-        st = self.lib.FT_ReadPipeEx(self.handle, FIFO_CH0, rx, nbytes,
-                                    byref(xferred), self.timeout_ms)
-        if st != FT_OK:
-            raise RuntimeError(f"FT_ReadPipeEx {st}")
-        if int(xferred.value) != nbytes:
-            raise RuntimeError(f"short read {xferred.value} of {nbytes} bytes")
-        return rx.raw[:nbytes]
+        out = bytearray()
+        while len(out) < nbytes:
+            want = min(MAX_XFER, nbytes - len(out))
+            rx = ctypes.create_string_buffer(want)
+            xferred = c_ulong(0)
+            st = self.lib.FT_ReadPipeEx(
+                self.handle, FIFO_CH0, rx, want, byref(xferred), self.timeout_ms
+            )
+            if xferred.value:
+                out += rx.raw[: int(xferred.value)]
+            if st != FT_OK or int(xferred.value) != want:
+                raise RuntimeError(f"FT_ReadPipeEx {st} ({len(out)} of {nbytes})")
+        return bytes(out)
 
 
 def open_ft601(index: int = 0, timeout_ms: int = 5000, backend: str = "auto"):
