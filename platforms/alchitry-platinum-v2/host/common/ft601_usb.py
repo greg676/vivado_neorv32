@@ -1,9 +1,8 @@
 """FT601 USB transport: libusb first, optional D3XX fallback.
 
-The Ft+ EEPROM is already 245 FIFO 32-bit. libusb bulk IN/OUT on
-VID 0403 / PID 601f is enough to move data. D3XX is only needed if
-libusb cannot claim the device; unpack the Linux SDK to /opt/ftdi/d3xx
-(ftd3xx.h + libftd3xx.so).
+FT60x Function Protocol: claim IF0+IF1, 20-byte session list on EP 0x01,
+then data on EP 0x02 / 0x82. That path wrote 13312 bytes on jetson-edge.
+D3XX on Linux uses fifo id 0 (FT_WritePipeEx), not pipe 0x02.
 """
 
 from __future__ import annotations
@@ -18,17 +17,42 @@ from ctypes import (
     c_uint,
     c_uint8,
     c_uint16,
+    c_uint32,
     c_void_p,
     c_ulong,
 )
-from typing import Optional, Tuple
 
 FT601_VID = 0x0403
 FT601_PID = 0x601F
 PIPE_OUT = 0x02
 PIPE_IN = 0x82
+EP_SESSION = 0x01
+FIFO_CH0 = 0
 FT_OK = 0
 FT_OPEN_BY_INDEX = 0x00000010
+FT_PIPE_DIR_IN = 0
+FT_PIPE_DIR_OUT = 1
+
+
+class _FT_PIPE_TRANSFER_CONF(Structure):
+    _fields_ = [
+        ("fPipeNotUsed", c_int),
+        ("fNonThreadSafeTransfer", c_int),
+        ("bURBCount", c_uint8),
+        ("wURBBufferCount", c_uint16),
+        ("dwURBBufferSize", c_uint32),
+        ("dwStreamingSize", c_uint32),
+    ]
+
+
+class _FT_TRANSFER_CONF(Structure):
+    _fields_ = [
+        ("wStructSize", c_uint16),
+        ("pipe", _FT_PIPE_TRANSFER_CONF * 2),
+        ("fStopReadingOnURBUnderrun", c_int),
+        ("fBitBangMode", c_int),
+        ("fKeepDeviceSideBufferAfterReopen", c_int),
+    ]
 
 LIBUSB_TRANSFER_TYPE_BULK = 2
 LIBUSB_SUCCESS = 0
@@ -159,37 +183,6 @@ def _load_libusb() -> ctypes.CDLL:
     return lib
 
 
-def _bulk_pair(lib, dev) -> Optional[Tuple[int, int, int]]:
-    cfg_p = POINTER(_ConfigDesc)()
-    rc = lib.libusb_get_active_config_descriptor(dev, byref(cfg_p))
-    if rc != 0:
-        rc = lib.libusb_get_config_descriptor(dev, 0, byref(cfg_p))
-    if rc != 0 or not cfg_p:
-        return None
-    cfg = cfg_p.contents
-    found = None
-    for i in range(cfg.bNumInterfaces):
-        intf = cfg.interface[i]
-        if intf.num_altsetting < 1:
-            continue
-        alt = intf.altsetting[0]
-        out_ep = 0
-        in_ep = 0
-        for k in range(alt.bNumEndpoints):
-            ep = alt.endpoint[k]
-            if (ep.bmAttributes & 0x3) != LIBUSB_TRANSFER_TYPE_BULK:
-                continue
-            if ep.bEndpointAddress & 0x80:
-                in_ep = ep.bEndpointAddress
-            else:
-                out_ep = ep.bEndpointAddress
-        if out_ep and in_ep:
-            found = (int(alt.bInterfaceNumber), int(out_ep), int(in_ep))
-            break
-    lib.libusb_free_config_descriptor(cfg_p)
-    return found
-
-
 class Ft601Libusb:
     name = "libusb"
 
@@ -197,7 +190,9 @@ class Ft601Libusb:
         self.lib = _load_libusb()
         self.ctx = c_void_p()
         self.handle = c_void_p()
-        self.iface = -1
+        self.claimed0 = False
+        self.claimed1 = False
+        self.sess = 0
         self.ep_out = PIPE_OUT
         self.ep_in = PIPE_IN
         self.timeout_ms = timeout_ms
@@ -221,22 +216,25 @@ class Ft601Libusb:
                 if match != index:
                     match += 1
                     continue
-                pair = _bulk_pair(self.lib, lst[i])
                 rc = self.lib.libusb_open(lst[i], byref(self.handle))
                 if rc != 0:
                     raise RuntimeError(
                         f"libusb_open failed ({self.lib.libusb_strerror(rc).decode()})"
                     )
-                if not pair:
-                    raise RuntimeError("no bulk IN/OUT pair on FT601")
-                self.iface, self.ep_out, self.ep_in = pair
                 self.lib.libusb_set_auto_detach_kernel_driver(self.handle, 1)
-                rc = self.lib.libusb_claim_interface(self.handle, self.iface)
+                rc = self.lib.libusb_claim_interface(self.handle, 0)
                 if rc != 0:
                     raise RuntimeError(
-                        f"claim interface {self.iface} failed "
-                        f"({self.lib.libusb_strerror(rc).decode()})"
+                        f"claim IF0 failed ({self.lib.libusb_strerror(rc).decode()})"
                     )
+                self.claimed0 = True
+                rc = self.lib.libusb_claim_interface(self.handle, 1)
+                if rc != 0:
+                    raise RuntimeError(
+                        f"claim IF1 failed ({self.lib.libusb_strerror(rc).decode()})"
+                    )
+                self.claimed1 = True
+                self.lib.libusb_clear_halt(self.handle, c_uint8(EP_SESSION))
                 self.lib.libusb_clear_halt(self.handle, c_uint8(self.ep_out))
                 self.lib.libusb_clear_halt(self.handle, c_uint8(self.ep_in))
                 opened = True
@@ -250,10 +248,26 @@ class Ft601Libusb:
                 "Board disconnected?"
             )
 
+    def _session(self, pipe: int, length: int) -> None:
+        self.sess = (self.sess + 1) & 0xFFFFFFFF
+        pkt = bytearray(20)
+        pkt[0:4] = self.sess.to_bytes(4, "little")
+        pkt[4] = pipe & 0xFF
+        pkt[8:12] = int(length).to_bytes(4, "little")
+        buf = ctypes.create_string_buffer(bytes(pkt), 20)
+        got = c_int(0)
+        rc = self.lib.libusb_bulk_transfer(
+            self.handle, c_uint8(EP_SESSION), buf, 20, byref(got), self.timeout_ms
+        )
+        if rc != 0 or got.value != 20:
+            raise RuntimeError(f"session EP 0x01 {rc} got={got.value}")
+
     def close(self) -> None:
         if self.handle:
-            if self.iface >= 0:
-                self.lib.libusb_release_interface(self.handle, self.iface)
+            if self.claimed1:
+                self.lib.libusb_release_interface(self.handle, 1)
+            if self.claimed0:
+                self.lib.libusb_release_interface(self.handle, 0)
             self.lib.libusb_close(self.handle)
             self.handle = c_void_p()
         if self.ctx:
@@ -261,6 +275,7 @@ class Ft601Libusb:
             self.ctx = c_void_p()
 
     def write(self, data: bytes) -> int:
+        self._session(self.ep_out, len(data))
         done = 0
         while done < len(data):
             chunk = data[done:]
@@ -281,6 +296,7 @@ class Ft601Libusb:
         return done
 
     def read(self, nbytes: int) -> bytes:
+        self._session(self.ep_in, nbytes)
         out = bytearray()
         while len(out) < nbytes:
             want = nbytes - len(out)
@@ -332,16 +348,25 @@ class Ft601D3xx:
         lib.FT_Create.restype = c_ulong
         lib.FT_Close.argtypes = [c_void_p]
         lib.FT_Close.restype = c_ulong
-        lib.FT_WritePipe.argtypes = [c_void_p, c_uint8, ctypes.c_void_p, c_ulong,
-                                     POINTER(c_ulong), c_void_p]
-        lib.FT_WritePipe.restype = c_ulong
-        lib.FT_ReadPipe.argtypes = [c_void_p, c_uint8, ctypes.c_void_p, c_ulong,
-                                    POINTER(c_ulong), c_void_p]
-        lib.FT_ReadPipe.restype = c_ulong
+        lib.FT_WritePipeEx.argtypes = [c_void_p, c_uint8, ctypes.c_void_p, c_ulong,
+                                       POINTER(c_ulong), c_ulong]
+        lib.FT_WritePipeEx.restype = c_ulong
+        lib.FT_ReadPipeEx.argtypes = [c_void_p, c_uint8, ctypes.c_void_p, c_ulong,
+                                      POINTER(c_ulong), c_ulong]
+        lib.FT_ReadPipeEx.restype = c_ulong
         lib.FT_SetPipeTimeout.argtypes = [c_void_p, c_uint8, c_ulong]
         lib.FT_SetPipeTimeout.restype = c_ulong
+        lib.FT_SetTransferParams.argtypes = [c_void_p, c_ulong]
+        lib.FT_SetTransferParams.restype = c_ulong
         self.lib = lib
         self.handle = c_void_p()
+        self.timeout_ms = timeout_ms
+        conf = _FT_TRANSFER_CONF()
+        conf.wStructSize = ctypes.sizeof(_FT_TRANSFER_CONF)
+        conf.pipe[FT_PIPE_DIR_IN].fNonThreadSafeTransfer = 1
+        conf.pipe[FT_PIPE_DIR_OUT].fNonThreadSafeTransfer = 1
+        for fifo in range(4):
+            lib.FT_SetTransferParams(ctypes.byref(conf), fifo)
         st = lib.FT_Create(c_void_p(index), FT_OPEN_BY_INDEX, byref(self.handle))
         if st != FT_OK or not self.handle.value:
             raise RuntimeError(f"FT_Create index {index} failed ({st})")
@@ -355,19 +380,19 @@ class Ft601D3xx:
 
     def write(self, data: bytes) -> int:
         xferred = c_ulong(0)
-        st = self.lib.FT_WritePipe(self.handle, PIPE_OUT, data, len(data),
-                                   byref(xferred), None)
+        st = self.lib.FT_WritePipeEx(self.handle, FIFO_CH0, data, len(data),
+                                     byref(xferred), self.timeout_ms)
         if st != FT_OK or xferred.value != len(data):
-            raise RuntimeError(f"FT_WritePipe {st} ({xferred.value} of {len(data)})")
+            raise RuntimeError(f"FT_WritePipeEx {st} ({xferred.value} of {len(data)})")
         return int(xferred.value)
 
     def read(self, nbytes: int) -> bytes:
         rx = ctypes.create_string_buffer(nbytes)
         xferred = c_ulong(0)
-        st = self.lib.FT_ReadPipe(self.handle, PIPE_IN, rx, nbytes,
-                                  byref(xferred), None)
+        st = self.lib.FT_ReadPipeEx(self.handle, FIFO_CH0, rx, nbytes,
+                                    byref(xferred), self.timeout_ms)
         if st != FT_OK:
-            raise RuntimeError(f"FT_ReadPipe {st}")
+            raise RuntimeError(f"FT_ReadPipeEx {st}")
         if int(xferred.value) != nbytes:
             raise RuntimeError(f"short read {xferred.value} of {nbytes} bytes")
         return rx.raw[:nbytes]
