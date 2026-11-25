@@ -46,7 +46,9 @@ vivado -mode batch -source tcl/program_ram.tcl -tclargs \
 
 Do not write SPI flash / `.mcs`. The NeoRV32 SoC bitstream is not in this design; swap back when you are done.
 
-LEDs: `[0]` board-clk heartbeat, `[1]` `ft_clk` heartbeat (must blink — if not, FT601 CLK is dead), `[2]` out of reset, `[3]` FIFO has data, `[4]` FIFO full, `[5]` RX beat, `[6]` TX beat, `[7]` overflow sticky.
+LEDs: `[0]` board-clk heartbeat, `[1]` `ft_clk` heartbeat (must blink — if not, FT601 CLK is dead), `[2]` `~ft_rxf` (lights when the FT601 RX FIFO has data for the FPGA to drain), `[3]` loopback FIFO has data, `[4]` FIFO full, `[5]` RX beat, `[6]` TX beat, `[7]` overflow sticky.
+
+`ft_reset` follows the Pt button only (high when the button is up). SRAM load must not pulse RESET_N; do not press reset while testing.
 
 ## Host USB
 

@@ -61,7 +61,7 @@ make_bd_pins_external -name probe_i [get_bd_pins pvla_0/probe_i]
 make_bd_pins_external -name status_o [get_bd_pins pvla_0/status_o]
 
 if {$pvla_phy == 0} {
-  # Board clock only for the FT601 reset sequencer. Not a sample clock.
+  # Board clock + Pt button for Lucid-style ft_reset. Not a sample clock.
   make_bd_pins_external -name clk   [get_bd_pins pvla_0/clk]
   make_bd_pins_external -name rst_n [get_bd_pins pvla_0/rst_n]
 
