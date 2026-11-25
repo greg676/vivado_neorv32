@@ -4,7 +4,7 @@ Proves the USB 3 path on Alchitry Pt V2 + Ft+ (`FT601Q`, 32-bit 245 FIFO):
 
 `Host → FT601 → FPGA FIFO → FT601 → Host`
 
-The matcher **fails closed** on dropped words, bit swaps, odd/short USB transfers, and byte-enable mistakes (loopback echoes `BE=0xF` on every word).
+The matcher **fails closed** on dropped words, bit swaps, odd/short USB transfers, and byte-enable mistakes. Loopback **always drives `BE=0xF`** on TX (DATA[7:0]=USB byte0 … DATA[31:24]=USB byte3). It does **not** replay captured `BE[3:0]`.
 
 **Preferred USB backend is libusb-1.0.** D3XX is optional.
 

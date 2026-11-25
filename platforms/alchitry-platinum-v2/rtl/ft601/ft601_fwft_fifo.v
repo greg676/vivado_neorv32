@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 // First-word fall-through FIFO (distributed RAM).
-// Width is typically 36 = {be[3:0], data[31:0]}.
+// Loopback echo uses WIDTH=32 (DATA only; TX BE is forced 0xF).
 module ft601_fwft_fifo #(
     parameter WIDTH  = 36,
     parameter DEPTH  = 512,

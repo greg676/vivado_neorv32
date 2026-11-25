@@ -207,8 +207,9 @@ module tb_ft601_loopback;
         end
     endtask
 
-    task automatic run_vector;
-        input [3:0] be_force;
+    task automatic run_vector_rx_be;
+        input [3:0] rx_be;
+        input [3:0] expect_tx_be;
         integer k;
         reg [31:0] d;
         reg [3:0]  b;
@@ -216,7 +217,7 @@ module tb_ft601_loopback;
             got = 0;
             hold_fpga_reset(1);
             for (k = 0; k < nvec; k = k + 1)
-                host_push_word(vec[k], be_force);
+                host_push_word(vec[k], rx_be);
             hold_fpga_reset(0);
 
             for (k = 0; k < nvec; k = k + 1) begin
@@ -227,12 +228,19 @@ module tb_ft601_loopback;
                     $display("MISMATCH word %0d: got %h expected %h", k, d, vec[k]);
                     errors = errors + 1;
                 end
-                if (b !== be_force) begin
-                    $display("BE error word %0d: be=%h expected %h", k, b, be_force);
+                if (b !== expect_tx_be) begin
+                    $display("BE error word %0d: be=%h expected TX %h", k, b, expect_tx_be);
                     errors = errors + 1;
                 end
                 got = got + 1;
             end
+        end
+    endtask
+
+    task automatic run_vector;
+        input [3:0] be_force;
+        begin
+            run_vector_rx_be(be_force, 4'hF);
         end
     endtask
 
@@ -283,12 +291,14 @@ module tb_ft601_loopback;
         run_vector(4'hF);
         $display("PASS xor: %0d/%0d words", got, nvec);
 
-        // Byte-enable echo (FIFO pads only; USB bulk is still 32-bit words).
+        // Host USB is always 4-byte words. Push with BE=0x3 (only DATA[15:0]
+        // marked valid on the pad); echo TX must still drive BE=0xF so the
+        // host does not drop bytes 2/3.
         nvec = 8;
         for (i = 0; i < 8; i = i + 1)
             vec[i] = 32'hA5A50000 + i[31:0];
-        run_vector(4'h3);
-        $display("PASS BE=0x3 echo: %0d words", got);
+        run_vector_rx_be(4'h3, 4'hF);
+        $display("PASS BE pad 0x3 -> TX 0xF: %0d words", got);
 
         // TXE backpressure: stop popping until PHY TX fills, then drain.
         nvec = 64;
