@@ -73,6 +73,12 @@ module ft601_loopback_core #(
             // 32-bit echo only. Do not replay captured BE: a sampled 0/Z on
             // BE[i] would drop USB byte i (DATA[8*i+7:8*i]) and shift the
             // host stream. Host tools always use 4-byte words.
+            wire [31:0] rx_mapped;
+            ft601_data_map #(.PINOUT("PT_ALPHA")) u_rx_map (
+                .d_in  (rx_data),
+                .d_out (rx_mapped)
+            );
+
             ft601_fwft_fifo #(
                 .WIDTH (32),
                 .DEPTH (512),
@@ -80,7 +86,7 @@ module ft601_loopback_core #(
             ) u_fifo (
                 .clk         (ft_clk),
                 .rst         (rst),
-                .wr_data     (rx_data),
+                .wr_data     (rx_mapped),
                 .wr_en       (rx_valid),
                 .full        (fifo_full_w),
                 .almost_full (fifo_almost_full),

@@ -40,7 +40,11 @@ set_property PACKAGE_PIN L1 [get_ports {ft_be[2]}]
 set_property PACKAGE_PIN F3 [get_ports {ft_be[3]}]
 set_property IOSTANDARD LVCMOS33 [get_ports {ft_be[*]}]
 
-# DATA[0:13] = first-batch Bank B (PT_ALPHA)
+# USB LE word: BE[i] enables DATA[8*i+7:8*i] = host byte i.
+# DATA[0:13] = first-batch Bank B (PT_ALPHA). Production V2 uses R14..AA19.
+# A V2 bitstream on ALPHA (or the reverse) leaves FT601 D[0:13] undriven;
+# D[14:31] still match. Host word 0 of an incrementing pattern is 0, so a
+# permute cannot yield 0x00000df6 — that signature is 1-bits inside D[0:13].
 set_property PACKAGE_PIN AB13 [get_ports {ft_data[0]}]
 set_property PACKAGE_PIN AA13 [get_ports {ft_data[1]}]
 set_property PACKAGE_PIN AA11 [get_ports {ft_data[2]}]
