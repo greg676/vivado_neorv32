@@ -96,19 +96,19 @@ module ft601_sync_fifo #(
     wire reading = (state == ST_OE) || (state == ST_READ);
     wire writing = (state == ST_WRITE);
 
-    // Lucid always @* : defaults, then WRITE overrides wr.
-    // Gate WR on registered TXE so we do not keep WR low after the FT601
-    // is full (USB 4 KiB drain). Pop only while WR is already at the pads
-    // (wr_n_r), matching the IOB delay — combo tx_ready on WRITE entry
-    // incremented two words before the first capture (4 KiB skip of +2).
-    wire wr_n_c    = (writing && tx_valid && (txe_r == 1'b0)) ? 1'b0 : 1'b1;
+    // Lucid always @* uses live TXE for wr and FIFO rget. IOB FFs on WR
+    // and DATA provide the register. Using txe_r here added a second cycle
+    // and skipped two counts at every 4 KiB TXE bubble; popping from wr_n_r
+    // duplicated the first word.
+    wire can_wr    = writing && tx_valid && (ft_txe == 1'b0) && !rst;
+    wire wr_n_c    = can_wr ? 1'b0 : 1'b1;
     wire reading_z = reading && !ALWAYS_DRIVE;
     wire data_oe_c = ~reading_z;
     wire oe_n_c    = (state == ST_OE)   ? 1'b0 :
                      (state == ST_READ) ? ~rx_ready : 1'b1;
     wire rd_n_c    = (state == ST_READ) ? ~rx_ready : 1'b1;
 
-    assign tx_ready = (wr_n_r == 1'b0) && (txe_r == 1'b0) && tx_valid && !rst;
+    assign tx_ready = can_wr;
 
     wire want_read  = (rxf_r == 1'b0) && rx_ready;
     wire want_write = (txe_r == 1'b0) && tx_valid;

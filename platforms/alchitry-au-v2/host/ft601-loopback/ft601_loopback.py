@@ -229,7 +229,7 @@ def run_hw(args: argparse.Namespace) -> int:
             words_ok += ok
             words_bad += bad
             for item in fails:
-                if len(first_bads) < 2:
+                if len(first_bads) < 8:
                     first_bads.append(item)
             if len(got) != this:
                 words_bad += this - len(got)
