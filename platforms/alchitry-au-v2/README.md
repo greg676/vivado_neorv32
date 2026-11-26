@@ -33,4 +33,21 @@ python3 host/ft601-loopback/ft601_loopback.py --backend d3xx --bytes 16384 --chu
 # RX-only (FPGA RD while RXF). Then host OUT known pattern.
 openFPGALoader --fpga-part xc7a35tftg256 --write-sram bitstreams/ft601_rx_only_top_v2.bit
 python3 host/ft601-loopback/ft601_loopback.py --backend d3xx --bytes 16384 --chunk-bytes 16384 --rx-only
+
+# Echo loopback (PR #18 PHY: Lucid DATA-before-WR, 4 KiB write bursts).
+vivado -mode batch -source tcl/rebuild_ft601_loopback.tcl
+openFPGALoader --fpga-part xc7a35tftg256 --write-sram bitstreams/ft601_loopback_top_v2.bit
+python3 host/ft601-loopback/ft601_loopback.py --backend d3xx --bytes 16384 --chunk-bytes 4096
+```
+
+## LA capture (pattern → 4 KiB TX bursts → PulseView `.sr`)
+
+Dedicated top, same PHY. Host IN only. Writes a sigrok v2 `.sr` (keep zips out of Project `docs/`).
+
+```bash
+vivado -mode batch -source tcl/rebuild_la_capture.tcl
+# bitstream: bitstreams/la_capture_top_v2.bit
+openFPGALoader --fpga-part xc7a35tftg256 --write-sram bitstreams/la_capture_top_v2.bit
+python3 host/ft601-capture/ft601_capture.py --backend d3xx --bytes 16384 --chunk-bytes 4096 \
+    --sr /tmp/au-la-counter.sr
 ```

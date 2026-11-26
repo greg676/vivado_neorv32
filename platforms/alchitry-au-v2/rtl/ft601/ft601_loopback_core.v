@@ -40,7 +40,7 @@ module ft601_loopback_core #(
     wire        fifo_almost_full;
     wire        fifo_empty_w;
     wire [31:0] fifo_rdata;
-    wire [9:0]  fifo_count;
+    wire [11:0] fifo_count;
 
     assign fifo_empty = fifo_empty_w;
     assign fifo_full  = fifo_full_w;
@@ -55,7 +55,7 @@ module ft601_loopback_core #(
             assign fifo_almost_full = 1'b0;
             assign fifo_empty_w     = 1'b1;
             assign fifo_rdata       = 32'd0;
-            assign fifo_count       = 10'd0;
+            assign fifo_count       = 12'd0;
             assign first_rx_word    = 32'd0;
             assign first_rx_valid   = 1'b0;
 
@@ -78,7 +78,7 @@ module ft601_loopback_core #(
             assign fifo_almost_full = 1'b0;
             assign fifo_empty_w     = 1'b1;
             assign fifo_rdata       = 32'd0;
-            assign fifo_count       = 10'd0;
+            assign fifo_count       = 12'd0;
 
             reg        got_first;
             reg [31:0] first_word;
@@ -98,33 +98,57 @@ module ft601_loopback_core #(
             assign tx_be          = 4'hF;
             assign tx_valid       = got_first;
         end else begin : g_loopback
-            assign first_rx_word  = 32'd0;
-            assign first_rx_valid = 1'b0;
-            assign rx_ready = !fifo_almost_full;
+            // 32-bit echo only. Do not replay captured BE.
+            // 4 KiB BRAM ping-pong: fill 1024 words from RX, then TX that
+            // burst through the PR #18 PHY (one 4 KiB write transaction).
+            localparam integer BURST = 1024;
 
-            // 32-bit echo only. Do not replay captured BE: a sampled 0/Z on
-            // BE[i] would drop USB byte i (DATA[8*i+7:8*i]) and shift the
-            // host stream. Host tools always use 4-byte words.
-            ft601_fwft_fifo #(
-                .WIDTH (32),
-                .DEPTH (512),
-                .ADDR_W(9)
-            ) u_fifo (
-                .clk         (ft_clk),
-                .rst         (rst),
-                .wr_data     (rx_data),
-                .wr_en       (rx_valid),
-                .full        (fifo_full_w),
-                .almost_full (fifo_almost_full),
-                .rd_data     (fifo_rdata),
-                .rd_en       (tx_ready),
-                .empty       (fifo_empty_w),
-                .count       (fifo_count)
-            );
+            (* ram_style = "block" *)
+            reg [31:0] mem [0:BURST-1];
+            reg [9:0]  wr_n;
+            reg [9:0]  rd_n;
+            reg        dumping;
+            reg [31:0] tx_hold;
 
-            assign tx_data  = fifo_rdata;
-            assign tx_be    = 4'hF;
-            assign tx_valid = !fifo_empty_w;
+            assign first_rx_word    = 32'd0;
+            assign first_rx_valid   = 1'b0;
+            assign rx_ready         = !dumping;
+            assign fifo_full_w      = dumping;
+            assign fifo_almost_full = dumping;
+            assign fifo_empty_w     = !dumping;
+            assign fifo_rdata       = tx_hold;
+            assign fifo_count       = dumping ? 12'd1024 : {2'b00, wr_n};
+            assign tx_data          = tx_hold;
+            assign tx_be            = 4'hF;
+            assign tx_valid         = dumping;
+
+            always @(posedge ft_clk) begin
+                if (rst) begin
+                    wr_n    <= 10'd0;
+                    rd_n    <= 10'd0;
+                    dumping <= 1'b0;
+                    tx_hold <= 32'd0;
+                end else if (!dumping) begin
+                    rd_n <= 10'd0;
+                    if (rx_valid) begin
+                        mem[wr_n] <= rx_data;
+                        if (wr_n == 10'd1023) begin
+                            wr_n    <= 10'd0;
+                            dumping <= 1'b1;
+                            tx_hold <= mem[10'd0];
+                        end else
+                            wr_n <= wr_n + 1'b1;
+                    end
+                end else if (tx_ready) begin
+                    if (rd_n == 10'd1023) begin
+                        dumping <= 1'b0;
+                        rd_n    <= 10'd0;
+                    end else begin
+                        rd_n    <= rd_n + 1'b1;
+                        tx_hold <= mem[rd_n + 10'd1];
+                    end
+                end
+            end
         end
     endgenerate
 
