@@ -3,5 +3,7 @@ vivado_project_ft601/
 *.log
 *.str
 .Xil/
+__pycache__/
+*.pyc
 bitstreams/*.bit
 bitstreams/*.ltx
