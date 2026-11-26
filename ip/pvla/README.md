@@ -32,7 +32,7 @@ Probe ports stay on the canvas for you to wire. Optional **Include Br Bank A pro
 | `C_HAS_AXI` | Enabled | AXI4-Lite arm/trigger/status |
 | `C_INCLUDE_BR_XDC` | No | Optional Br Bank A `probe_i` pins (Pt) |
 
-Counter / walking-one match the Au LA capture PASS (one 32-bit word per `tx_ready`, 4 samples packed little-endian). Live probes fill a 1024-word ping-pong so the FT601 never sees a short write.
+Counter / walking-one / live all fill two 4 KiB BRAM banks (`la_pingpong_bram`) so the sampler never stalls on TXE. PHY still sees only full 4 KiB write bursts. Pack is four 8-bit samples little-endian per 32-bit word.
 
 ## Ports
 
@@ -66,7 +66,8 @@ Counter / walking-one match the Au LA capture PASS (one 32-bit word per `tx_read
 | Path | Role |
 |---|---|
 | `hdl/pvla.v` | IP top |
-| `hdl/pvla_capture.v` | Packer + 4 KiB ping-pong + PHY mux |
+| `hdl/pvla_capture.v` | Packer + dual 4 KiB BRAM ping-pong + PHY mux |
+| `../platforms/alchitry-au-v2/rtl/la/la_pingpong_bram.v` | Two 1024×32 banks in front of the PHY |
 | `hdl/pvla_axi_lite.v` | AXI4-Lite |
 | `xdc/ftplus_ft601_pt_alpha.xdc` | First-batch Ft+ pins |
 | `xdc/ftplus_ft601_pt_v2.xdc` | Production Pt Ft+ pins |

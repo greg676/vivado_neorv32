@@ -5,10 +5,9 @@
 //                  (Lucid DATA-before-WR, 4 KiB write bursts, NEVER RD)
 // C_PHY=1 STREAM — 32-bit AXI-Stream master for a later SuperSpeed FIFO
 //
-// Counter / walking-one: one 32-bit word every clock while tx_ready, same
-// pack as platforms/alchitry-au-v2/rtl/la (Au LA capture PASS).
-// Live probes: 4 samples/word into a 1024-word ping-pong so the PHY never
-// sees a short write (FT601 245 ping-pong commits USB IN on 4 KiB).
+// Pattern and live both fill two 4 KiB BRAM banks (la_pingpong_bram).
+// Sampler enable is wr_ready, not PHY tx_ready / TXE. PHY sees only full
+// 4 KiB write bursts (FT601 245 ping-pong commits USB IN on 4 KiB).
 //
 // Do not instantiate the old echo FWFT that starved WR mid-burst.
 // Does not touch DDR3 / MIG / NeoRV32.
@@ -126,11 +125,16 @@ module pvla_capture #(
 
     wire is_pat = (source_r == SRC_CTR) || (source_r == SRC_WALK);
 
-    // ── pattern: 4 samples / clock, advance on tx_ready (PR #19) ─
+    // ── pattern: 4 samples / clock, advance on ping-pong wr_ready ─
     wire        tx_ready;
+    wire        wr_ready;
+    wire        pp_ovf;
+    wire        dump_active;
+    wire        tx_last;
+    wire [1:0]  banks_full;
     reg  [31:0] pat_n;
     wire [7:0]  pat_s0, pat_s1, pat_s2, pat_s3;
-    wire        pat_en = armed_r && is_pat && tx_ready;
+    wire        pat_en = armed_r && is_pat && wr_ready;
 
     function automatic [7:0] pat_samp;
         input [31:0] idx;
@@ -224,77 +228,41 @@ module pvla_capture #(
         end
     end
 
-    // ── 4 KiB ping-pong (live only). Two 1024-word banks. ─────────
-    (* ram_style = "block" *) reg [31:0] burst_mem [0:2047];
-    reg        wr_bank, rd_bank;
-    reg [9:0]  wr_n, rd_n;
-    reg [1:0]  bank_full;
-    reg        dumping;
-    reg        dump_load;
-    reg [31:0] rd_q;
-    reg        live_ovf;
+    // ── dual 4 KiB BRAM ping-pong (pattern and live) ──────────────
+    wire        pp_rst = cap_rst || (cmd_valid && (cmd_data[CMD_ABRT] || cmd_data[CMD_ARM]));
+    wire        fill_valid = armed_r && (is_pat ? wr_ready : live_valid);
+    wire [31:0] fill_data  = is_pat ? pat_word : live_word;
+    wire [31:0] tx_data;
+    wire        tx_valid;
 
-    wire [10:0] wr_addr = {wr_bank, wr_n};
-    wire [10:0] rd_addr = {rd_bank, rd_n};
-    wire        live_wr = live_valid && armed_r && !is_pat && !bank_full[wr_bank];
+    la_pingpong_bram #(
+        .WORDS (BURST)
+    ) u_pp (
+        .clk             (cap_clk),
+        .rst             (pp_rst),
+        .wr_data         (fill_data),
+        .wr_valid        (fill_valid),
+        .wr_ready        (wr_ready),
+        .tx_data         (tx_data),
+        .tx_valid        (tx_valid),
+        .tx_last         (tx_last),
+        .tx_ready        (tx_ready),
+        .overflow_sticky (pp_ovf),
+        .dump_active     (dump_active),
+        .banks_full      (banks_full)
+    );
 
-    always @(posedge cap_clk) begin
-        if (live_wr)
-            burst_mem[wr_addr] <= live_word;
-        rd_q <= burst_mem[rd_addr];
-    end
-
-    always @(posedge cap_clk) begin
-        if (cap_rst || (cmd_valid && (cmd_data[CMD_ABRT] || cmd_data[CMD_ARM]))) begin
-            wr_bank   <= 1'b0;
-            rd_bank   <= 1'b0;
-            wr_n      <= 10'd0;
-            rd_n      <= 10'd0;
-            bank_full <= 2'b00;
-            dumping   <= 1'b0;
-            dump_load <= 1'b0;
-            live_ovf  <= 1'b0;
-        end else if (!is_pat) begin
-            if (live_valid && armed_r) begin
-                if (bank_full[wr_bank])
-                    live_ovf <= 1'b1;
-                else begin
-                    if (wr_n == 10'd1023) begin
-                        wr_n                <= 10'd0;
-                        bank_full[wr_bank]  <= 1'b1;
-                        wr_bank             <= ~wr_bank;
-                    end else
-                        wr_n <= wr_n + 1'b1;
-                end
-            end
-
-            if (!dumping && !dump_load && bank_full[rd_bank]) begin
-                dump_load <= 1'b1;
-                rd_n      <= 10'd0;
-            end else if (dump_load) begin
-                dump_load <= 1'b0;
-                dumping   <= 1'b1;
-            end else if (dumping && tx_ready) begin
-                if (rd_n == 10'd1023) begin
-                    dumping            <= 1'b0;
-                    bank_full[rd_bank] <= 1'b0;
-                    rd_bank            <= ~rd_bank;
-                    rd_n               <= 10'd0;
-                end else
-                    rd_n <= rd_n + 1'b1;
-            end
-        end
-    end
+    wire live_drop = live_valid && armed_r && !is_pat && !wr_ready;
 
     always @(posedge cap_clk) begin
         if (cap_rst) begin
-            ovf_r     <= 1'b0;
-            ovf_cnt_r <= 32'd0;
-            drop_cnt_r<= 32'd0;
+            ovf_r      <= 1'b0;
+            ovf_cnt_r  <= 32'd0;
+            drop_cnt_r <= 32'd0;
         end else begin
-            if (live_ovf)
+            if (pp_ovf || live_drop)
                 ovf_r <= 1'b1;
-            if (live_valid && armed_r && !is_pat && bank_full[wr_bank]) begin
+            if (live_drop) begin
                 ovf_cnt_r  <= ovf_cnt_r + 1'b1;
                 drop_cnt_r <= drop_cnt_r + 1'b1;
             end
@@ -305,15 +273,8 @@ module pvla_capture #(
     assign overflow_cnt    = ovf_cnt_r;
     assign drop_cnt        = drop_cnt_r;
 
-    wire        live_tx_valid = dumping;
-    wire [31:0] live_tx_data  = rd_q;
-
-    wire        tx_valid = is_pat ? armed_r : live_tx_valid;
-    wire [31:0] tx_data  = is_pat ? pat_word : live_tx_data;
-    wire        tx_last  = (!is_pat) && dumping && (rd_n == 10'd1023);
-
-    assign fifo_empty = is_pat ? 1'b0 : ~dumping;
-    assign fifo_full  = |bank_full;
+    assign fifo_empty = ~tx_valid;
+    assign fifo_full  = |banks_full;
 
     // ── PHY / STREAM ─────────────────────────────────────────────
     wire [31:0] phy_rx_data;
@@ -348,7 +309,7 @@ module pvla_capture #(
             assign m_axis_tdata  = 32'h0;
             assign m_axis_tvalid = 1'b0;
             assign m_axis_tlast  = 1'b0;
-            assign tx_active     = tx_ready;
+            assign tx_active     = dump_active;
         end else begin : g_stream
             assign phy_rx_data  = 32'h0;
             assign phy_rx_be    = 4'h0;

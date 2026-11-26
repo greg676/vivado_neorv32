@@ -1,7 +1,8 @@
 `timescale 1ns / 1ps
 // Dedicated 8-channel LA capture top for Alchitry Au V2 + Ft+.
 // Same FT601 pads as the 245 loopback. Does not instantiate NeoRV32.
-// Samples are an on-FPGA counter (or walking-one); host IN 4 KiB PHY bursts.
+// Dual 4 KiB BRAM ping-pong in front of the PR #18 PHY so the sampler
+// never stalls on TXE. Host IN 4 KiB PHY bursts (~400 MB/s @ 32-bit 100 MHz).
 //
 // SOURCE: 0 = wrapping 8-bit counter, 1 = walking-one.
 module la_capture_top #(

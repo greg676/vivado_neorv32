@@ -107,6 +107,7 @@ def main() -> int:
     must_exist(AU / "tcl" / "pvla_bd_example.tcl")
     must_exist(AU / "rtl" / "ft601" / "ft601_sync_fifo.v")
     must_exist(AU / "rtl" / "ft601" / "ft601_reset.v")
+    must_exist(AU / "rtl" / "la" / "la_pingpong_bram.v")
 
     phy = (AU / "rtl" / "ft601" / "ft601_sync_fifo.v").read_text()
     if "ALWAYS_DRIVE" not in phy:
@@ -144,6 +145,10 @@ def main() -> int:
         err("pvla_capture.v must instantiate PHY with ALWAYS_DRIVE")
     if "TX_BURST_WORDS" not in cap:
         err("pvla_capture.v must set TX_BURST_WORDS (4 KiB bursts)")
+    if "la_pingpong_bram" not in cap:
+        err("pvla_capture.v must use la_pingpong_bram (dual 4 KiB banks)")
+    if "enable (tx_ready)" in cap or "advance on tx_ready" in cap:
+        err("pvla_capture.v pattern must not stall on PHY tx_ready / TXE")
     if "ft601_fwft_fifo" in cap:
         err("pvla_capture.v must not use the old echo FWFT starve path")
     if "la_capture_ctrl" in cap:
@@ -168,6 +173,7 @@ def main() -> int:
         "ftplus_ft601_au_v2.xdc",
         "xgui/pvla_v1_0.tcl", "SCOPED_TO_REF",
         "alchitry-au-v2/rtl/ft601/ft601_sync_fifo.v",
+        "alchitry-au-v2/rtl/la/la_pingpong_bram.v",
     ):
         if token not in xml:
             err(f"component.xml missing {token!r}")
@@ -218,7 +224,7 @@ def main() -> int:
     print("PVLA IP check PASS")
     print(f"  IP dir : {IP}")
     print("  VLNV   : greg676:user:pvla:1.0")
-    print("  PHY    : Au PR #18/#19 Lucid WR, 4 KiB, ALWAYS_DRIVE")
+    print("  PHY    : Au PR #18/#19 Lucid WR, dual-BRAM 4 KiB ping-pong, ALWAYS_DRIVE")
     print("  XDC    : PT_ALPHA / PT_V2 / AU_V2 DATA[0:13] match pin maps")
     return 0
 

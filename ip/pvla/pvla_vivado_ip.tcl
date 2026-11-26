@@ -31,6 +31,7 @@ set_property INCREMENTAL false [get_filesets sim_1]
 set file_list [list \
   [file join $au rtl/ft601/ft601_sync_fifo.v] \
   [file join $au rtl/ft601/ft601_reset.v] \
+  [file join $au rtl/la/la_pingpong_bram.v] \
   [file join $ip_dir hdl/pvla_axi_lite.v] \
   [file join $ip_dir hdl/pvla_capture.v] \
   [file join $ip_dir hdl/pvla.v] \

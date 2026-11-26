@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
-// Four consecutive 8-bit samples per clock, advanced only when enable
-// (PHY tx_ready). That keeps every 4 KiB FT601 write full — the packer
-// never starves WR mid-burst.
+// Four consecutive 8-bit samples per clock, advanced only when enable.
+// Enable is ping-pong wr_ready (fill bank has room), not PHY tx_ready /
+// TXE. Dual 4 KiB BRAMs keep every FT601 write a full burst.
 //
 // SOURCE 0 : wrapping 8-bit counter
 // SOURCE 1 : walking-one (0x01, 0x02, ..., 0x80)
