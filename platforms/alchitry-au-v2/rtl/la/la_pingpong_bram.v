@@ -85,9 +85,9 @@ module la_pingpong_bram #(
             dout            <= 32'd0;
             overflow_sticky <= 1'b0;
         end else begin
-            // Host too slow: both banks full and dump is waiting on TXE.
-            // A 2-cycle wrap while dump is popping is not overflow.
-            if (wr_valid && !wr_ready && (st == ST_DUMP) && !tx_ready)
+            // Both banks full while a dump is in progress. Do not use
+            // tx_ready / live TXE here — that path is the IOB WR budget.
+            if (wr_valid && !wr_ready && (st == ST_DUMP))
                 overflow_sticky <= 1'b1;
 
             if (wr_fire) begin
