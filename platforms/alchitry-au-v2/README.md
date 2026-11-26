@@ -51,3 +51,15 @@ openFPGALoader --fpga-part xc7a35tftg256 --write-sram bitstreams/la_capture_top_
 python3 host/ft601-capture/ft601_capture.py --backend d3xx --bytes 16384 --chunk-bytes 4096 \
     --sr /tmp/au-la-counter.sr
 ```
+
+## PVLA catalog IP (Block Design)
+
+Same PR #18/#19 PHY, packaged as `greg676:user:pvla:1.0`. Add `<repo>/ip` once. Does not instantiate NeoRV32 or MIG.
+
+```bash
+# Settings → IP → Repository → <repo>/ip
+cd platforms/alchitry-au-v2
+vivado -mode batch -source tcl/pvla_bd_example.tcl
+# wrapper: pvla_bd_wrapper. C_BOARD=AU_V2. FT601 pads auto-promoted, not BD nets.
+python3 ../../ip/pvla/scripts/check_pvla_ip.py
+```
