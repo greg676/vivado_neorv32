@@ -207,11 +207,23 @@ def run_hw(args: argparse.Namespace) -> int:
                         bad += 1
             else:
                 if args.tx_only:
-                    # FPGA free-runs before IN. Require consecutive +1 from
-                    # the first received word, not a start of 0.
-                    base = (first_words[0] if first_words else (got[0] if got else 0))
-                    base = (base + (bytes_done // WORD)) & 0xFFFFFFFF
-                    ok, bad, fails = verify_words(got, base)
+                    # Consecutive +1 from the previous received word. A 4 KiB
+                    # skip must count as one gap, not "all remaining words".
+                    ok = bad = 0
+                    fails = []
+                    prev = None
+                    if bytes_done and first_words:
+                        prev = (first_words[0] + (bytes_done // WORD) - 1) & 0xFFFFFFFF
+                    for i, value in enumerate(got):
+                        if prev is None:
+                            ok += 1
+                        elif ((value - prev) & 0xFFFFFFFF) == 1:
+                            ok += 1
+                        else:
+                            bad += 1
+                            if len(fails) < 8:
+                                fails.append((bytes_done // WORD + i, value, prev))
+                        prev = value
                 else:
                     ok, bad, fails = verify_words(got, next_idx)
             words_ok += ok
@@ -238,7 +250,11 @@ def run_hw(args: argparse.Namespace) -> int:
     print(f"words_bad   : {words_bad}")
     print(f"odd_bytes   : {odd_bytes}")
     for n, (idx, got_v, exp) in enumerate(first_bads, start=1):
-        print(f"fail_{n}      : idx={idx} got=0x{got_v:08x} exp=0x{exp:08x}")
+        if args.tx_only:
+            print(f"gap_{n}       : idx={idx} prev=0x{exp:08x} got=0x{got_v:08x} "
+                  f"delta={(got_v - exp) & 0xFFFFFFFF}")
+        else:
+            print(f"fail_{n}      : idx={idx} got=0x{got_v:08x} exp=0x{exp:08x}")
 
     if words_bad or odd_bytes or bytes_done != args.bytes:
         print("FAIL: mismatch or incomplete transfer", file=sys.stderr)

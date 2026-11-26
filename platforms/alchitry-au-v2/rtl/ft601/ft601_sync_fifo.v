@@ -97,16 +97,18 @@ module ft601_sync_fifo #(
     wire writing = (state == ST_WRITE);
 
     // Lucid always @* : defaults, then WRITE overrides wr.
-    wire wr_n_c    = writing ? ~tx_valid : 1'b1;
+    // Gate WR on registered TXE so we do not keep WR low after the FT601
+    // is full (USB 4 KiB drain). Pop only while WR is already at the pads
+    // (wr_n_r), matching the IOB delay — combo tx_ready on WRITE entry
+    // incremented two words before the first capture (4 KiB skip of +2).
+    wire wr_n_c    = (writing && tx_valid && (txe_r == 1'b0)) ? 1'b0 : 1'b1;
     wire reading_z = reading && !ALWAYS_DRIVE;
     wire data_oe_c = ~reading_z;
     wire oe_n_c    = (state == ST_OE)   ? 1'b0 :
                      (state == ST_READ) ? ~rx_ready : 1'b1;
     wire rd_n_c    = (state == ST_READ) ? ~rx_ready : 1'b1;
 
-    // Pop while in WRITE (Lucid rget = !ft_txe). IOB delays WR and DATA
-    // together, so the pad edge still has the pre-pop word.
-    assign tx_ready = writing && (txe_r == 1'b0) && tx_valid && !rst;
+    assign tx_ready = (wr_n_r == 1'b0) && (txe_r == 1'b0) && tx_valid && !rst;
 
     wire want_read  = (rxf_r == 1'b0) && rx_ready;
     wire want_write = (txe_r == 1'b0) && tx_valid;
