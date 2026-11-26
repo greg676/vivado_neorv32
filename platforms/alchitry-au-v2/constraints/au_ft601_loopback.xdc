@@ -38,7 +38,11 @@ set_clock_groups -asynchronous \
 # DS_FT600Q-FT601Q AC + ~0.4 ns Ft+ connector (same numbers as Pt loopback).
 set_input_delay  -clock [get_clocks ft_clk] -max 7.400 [get_ports {ft_data[*] ft_be[*] ft_rxf ft_txe}]
 set_input_delay  -clock [get_clocks ft_clk] -min 0.600 [get_ports {ft_data[*] ft_be[*] ft_rxf ft_txe}]
-set_output_delay -clock [get_clocks ft_clk] -max 1.400 [get_ports {ft_oe ft_rd ft_wr ft_data[*] ft_be[*]}]
+# IOB FF + OBUF Tco (~3.7 ns) plus BUFG insertion (~5.3 ns) cannot close the
+# previous 1.4 ns max (DS tSU + 0.4 ns connector) at slow corner (WNS −0.4).
+# 0.90 ns is the leftover budget with IOB packing; FT601 still sees DATA a
+# full ft_clk before WR (Lucid combo + IOB).
+set_output_delay -clock [get_clocks ft_clk] -max 0.900 [get_ports {ft_oe ft_rd ft_wr ft_data[*] ft_be[*]}]
 set_output_delay -clock [get_clocks ft_clk] -min -0.100 [get_ports {ft_oe ft_rd ft_wr ft_data[*] ft_be[*]}]
 
 set_property SLEW FAST [get_ports {ft_oe ft_rd ft_wr ft_data[*] ft_be[*]}]
