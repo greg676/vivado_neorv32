@@ -7,6 +7,7 @@ PYTHON   ?= python3
 
 RTL := \
 	../../rtl/ft601/ft601_fwft_fifo.v \
+	../../rtl/ft601/ft601_data_map.v \
 	../../rtl/ft601/ft601_sync_fifo.v \
 	../../rtl/ft601/ft601_loopback_core.v \
 	../../rtl/ft601/ft601_reset.v
