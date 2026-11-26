@@ -471,6 +471,13 @@ def open_ft601(index: int = 0, timeout_ms: int = 5000, backend: str = "auto"):
             print(f"FT601 backend : {dev.name}")
             return dev
         except (FileNotFoundError, OSError, RuntimeError) as exc:
+            errors.append(f"{Ft601D3xx.name} (no extra reset): {exc}")
+        try:
+            time.sleep(1.0)
+            dev = Ft601D3xx(index=index, timeout_ms=timeout_ms, skip_reset=False)
+            print(f"FT601 backend : {dev.name} (after USB reset)")
+            return dev
+        except (FileNotFoundError, OSError, RuntimeError) as exc:
             errors.append(f"{Ft601D3xx.name}: {exc}")
             raise FileNotFoundError(
                 "Could not open FT601 D3XX after session.\n  " + "\n  ".join(errors)

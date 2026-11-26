@@ -1,8 +1,8 @@
 `timescale 1ns / 1ps
-// FT601 loopback datapath.
-// MODE = "LOOPBACK"   : host words -> FIFO -> host
-// MODE = "TX_COUNTER" : drain (and drop) host RX; stream an incrementing
-//                       32-bit counter toward the host for TX-only tests.
+// FT601 datapath.
+// MODE = "LOOPBACK" : host words -> FIFO -> host
+// MODE = "TX_ONLY"  : never RD; WR incrementing 32-bit words while TXE
+// MODE = "RX_ONLY"  : RD while RXF; latch first word and TX that constant
 module ft601_loopback_core #(
     parameter MODE = "LOOPBACK"
 ) (
@@ -21,7 +21,9 @@ module ft601_loopback_core #(
     output wire        fifo_empty,
     output wire        fifo_full,
     output wire        rx_active,
-    output wire        tx_active
+    output wire        tx_active,
+    output wire [31:0] first_rx_word,
+    output wire        first_rx_valid
 );
 
     wire [31:0] rx_data;
@@ -46,15 +48,16 @@ module ft601_loopback_core #(
     assign tx_active  = tx_ready;
 
     generate
-        if (MODE == "TX_COUNTER") begin : g_tx_counter
-            // Still read (and drop) so a host write cannot fill the FT601 RX
-            // FIFO and deadlock the chip. TX is an incrementing counter.
-            assign rx_ready         = 1'b1;
+        if (MODE == "TX_ONLY") begin : g_tx_only
+            // Isolation: FPGA never asserts RD. Host must IN only.
+            assign rx_ready         = 1'b0;
             assign fifo_full_w      = 1'b0;
             assign fifo_almost_full = 1'b0;
             assign fifo_empty_w     = 1'b1;
             assign fifo_rdata       = 32'd0;
             assign fifo_count       = 10'd0;
+            assign first_rx_word    = 32'd0;
+            assign first_rx_valid   = 1'b0;
 
             reg [31:0] counter;
             always @(posedge ft_clk) begin
@@ -67,7 +70,36 @@ module ft601_loopback_core #(
             assign tx_data  = counter;
             assign tx_be    = 4'hF;
             assign tx_valid = 1'b1;
+        end else if (MODE == "RX_ONLY") begin : g_rx_only
+            // Drain host OUT. Report the first captured word by TXing that
+            // constant (not a full echo). Labeled on the host as first-RX.
+            assign rx_ready         = 1'b1;
+            assign fifo_full_w      = 1'b0;
+            assign fifo_almost_full = 1'b0;
+            assign fifo_empty_w     = 1'b1;
+            assign fifo_rdata       = 32'd0;
+            assign fifo_count       = 10'd0;
+
+            reg        got_first;
+            reg [31:0] first_word;
+            always @(posedge ft_clk) begin
+                if (rst) begin
+                    got_first  <= 1'b0;
+                    first_word <= 32'd0;
+                end else if (rx_valid && !got_first) begin
+                    got_first  <= 1'b1;
+                    first_word <= rx_data;
+                end
+            end
+
+            assign first_rx_word  = first_word;
+            assign first_rx_valid = got_first;
+            assign tx_data        = first_word;
+            assign tx_be          = 4'hF;
+            assign tx_valid       = got_first;
         end else begin : g_loopback
+            assign first_rx_word  = 32'd0;
+            assign first_rx_valid = 1'b0;
             assign rx_ready = !fifo_almost_full;
 
             // 32-bit echo only. Do not replay captured BE: a sampled 0/Z on

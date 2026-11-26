@@ -42,7 +42,17 @@ if {![file exists $bit_src]} {
 }
 
 file mkdir ./bitstreams
-set bit_dst [file normalize [file join ./bitstreams ${top}_${ft601_pinout}.bit]]
+if {![info exists ft601_mode]} {
+    set ft601_mode "LOOPBACK"
+}
+if {$ft601_mode eq "TX_ONLY"} {
+    set bit_name "ft601_tx_only_top_${ft601_pinout}.bit"
+} elseif {$ft601_mode eq "RX_ONLY"} {
+    set bit_name "ft601_rx_only_top_${ft601_pinout}.bit"
+} else {
+    set bit_name "${top}_${ft601_pinout}.bit"
+}
+set bit_dst [file normalize [file join ./bitstreams $bit_name]]
 if {[file exists $bit_src]} {
     file copy -force $bit_src $bit_dst
     puts "bitstream   : $bit_src"

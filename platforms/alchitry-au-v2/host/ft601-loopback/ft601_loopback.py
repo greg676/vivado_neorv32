@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""FT601 32-bit loopback / TX-counter host tool.
+"""FT601 32-bit loopback / TX-only / RX-only host tool.
 
 Fails closed on dropped words, bit swaps, and odd/short transfers.
-Prints sustained throughput.
+Prints first 8 received words and sustained throughput.
 
 Hardware uses libusb (preferred). D3XX is an optional fallback if the
 Linux SDK is unpacked to /opt/ftdi/d3xx. --self-test needs neither.
@@ -82,7 +82,18 @@ def bytes_to_words(buf: bytes) -> List[int]:
     return [int.from_bytes(buf[i:i + 4], "little") for i in range(0, len(buf), 4)]
 
 
+def fmt_first8(words: List[int]) -> str:
+    show = words[:8]
+    if not show:
+        return "(none)"
+    return " ".join(f"0x{w:08x}" for w in show)
+
+
 def run_hw(args: argparse.Namespace) -> int:
+    if args.tx_only and args.rx_only:
+        print("error: --tx-only and --rx-only are mutually exclusive", file=sys.stderr)
+        return 2
+
     vec: Optional[List[int]] = None
     if args.vector:
         try:
@@ -107,9 +118,54 @@ def run_hw(args: argparse.Namespace) -> int:
     words_bad = 0
     odd_bytes = 0
     first_bads: list = []
+    first_words: List[int] = []
     t0 = time.perf_counter()
 
     try:
+        if args.rx_only:
+            # FPGA RD while RXF; host OUT only for the payload. Then IN 8
+            # words of the latched first-RX constant (not a full echo).
+            while bytes_done < args.bytes:
+                this = min(chunk, (args.bytes - bytes_done) // WORD)
+                if vec:
+                    payload = words_to_bytes([vec[(next_idx + i) % len(vec)] for i in range(this)])
+                else:
+                    payload = words_to_bytes([pattern_word(next_idx + i) for i in range(this)])
+                try:
+                    dev.write(payload)
+                except RuntimeError as exc:
+                    print(f"error: {exc}", file=sys.stderr)
+                    odd_bytes += 1
+                    break
+                next_idx += this
+                bytes_done += this * WORD
+            report: List[int] = []
+            try:
+                raw = dev.read(8 * WORD)
+                report = bytes_to_words(raw)
+                first_words = report[:8]
+            except RuntimeError as exc:
+                print(f"error: first-RX constant IN failed: {exc}", file=sys.stderr)
+            print("mode        : rx-only (host OUT; FPGA latches first word)")
+            print(f"out_bytes   : {bytes_done}")
+            print(f"first_rx_const (FPGA TX of latched word, not echo): {fmt_first8(first_words)}")
+            if first_words:
+                print(f"note        : all IN words should equal first OUT word "
+                      f"0x{pattern_word(0):08x} if RX captured idx 0")
+            dt = time.perf_counter() - t0
+            print(f"seconds     : {dt:.4f}")
+            if not first_words or bytes_done != args.bytes or odd_bytes:
+                print("FAIL: RX-only OUT incomplete or no first-RX constant", file=sys.stderr)
+                return 1
+            if any(w != first_words[0] for w in first_words):
+                print("FAIL: first-RX constant was not constant", file=sys.stderr)
+                return 1
+            if first_words[0] != pattern_word(0) and vec is None:
+                print("FAIL: latched first RX word != 0x00000000", file=sys.stderr)
+                return 1
+            print("PASS")
+            return 0
+
         while bytes_done < args.bytes:
             this = min(chunk, (args.bytes - bytes_done) // WORD)
 
@@ -136,6 +192,8 @@ def run_hw(args: argparse.Namespace) -> int:
                 odd_bytes += n % WORD
                 break
             got = bytes_to_words(raw)
+            if len(first_words) < 8:
+                first_words.extend(got[: 8 - len(first_words)])
             if vec:
                 ok = bad = 0
                 fails = []
@@ -164,7 +222,8 @@ def run_hw(args: argparse.Namespace) -> int:
 
     dt = time.perf_counter() - t0
     mibps = (bytes_done / (1024 * 1024) / dt) if dt > 0 else 0.0
-    print(f"mode        : {'tx-only' if args.tx_only else 'loopback'}")
+    print(f"mode        : {'tx-only (host IN, no OUT)' if args.tx_only else 'loopback'}")
+    print(f"first_8     : {fmt_first8(first_words)}")
     print(f"bytes       : {bytes_done}")
     print(f"seconds     : {dt:.4f}")
     print(f"throughput  : {mibps:.2f} MiB/s")
@@ -175,7 +234,7 @@ def run_hw(args: argparse.Namespace) -> int:
         print(f"fail_{n}      : idx={idx} got=0x{got_v:08x} exp=0x{exp:08x}")
 
     if words_bad or odd_bytes or bytes_done != args.bytes:
-        print("FAIL: loopback mismatch or incomplete transfer", file=sys.stderr)
+        print("FAIL: mismatch or incomplete transfer", file=sys.stderr)
         return 1
     print("PASS")
     return 0
@@ -187,7 +246,10 @@ def main() -> int:
     p.add_argument("--index", type=int, default=0)
     p.add_argument("--timeout-ms", type=int, default=5000)
     p.add_argument("--chunk-bytes", type=int, default=16384)
-    p.add_argument("--tx-only", action="store_true")
+    p.add_argument("--tx-only", action="store_true",
+                   help="host IN only (FPGA TX_ONLY bitstream; never RD)")
+    p.add_argument("--rx-only", action="store_true",
+                   help="host OUT known pattern, then IN 8 words of latched first-RX constant")
     p.add_argument("--backend", choices=("auto", "libusb", "d3xx"), default="auto")
     p.add_argument("--self-test", action="store_true")
     p.add_argument("--vector", help="LE 32-bit .bin from sim/ft601/vectors (host reuses sim gold)")

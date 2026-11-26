@@ -3,7 +3,7 @@
 // Same RTL as the Pt 245 loopback; Au package pins live in XDC.
 // Not a multi-channel LA. Does not instantiate NeoRV32.
 //
-// MODE: "LOOPBACK" (default) or "TX_COUNTER" (set from TCL).
+// MODE: "LOOPBACK" (default), "TX_ONLY", or "RX_ONLY" (set from TCL).
 module ft601_loopback_top #(
     parameter MODE = "LOOPBACK"
 ) (
@@ -43,6 +43,8 @@ module ft601_loopback_top #(
     wire fifo_full;
     wire rx_active;
     wire tx_active;
+    wire [31:0] first_rx_word;
+    wire        first_rx_valid;
 
     ft601_loopback_core #(
         .MODE(MODE)
@@ -60,7 +62,9 @@ module ft601_loopback_top #(
         .fifo_empty      (fifo_empty),
         .fifo_full       (fifo_full),
         .rx_active       (rx_active),
-        .tx_active       (tx_active)
+        .tx_active       (tx_active),
+        .first_rx_word   (first_rx_word),
+        .first_rx_valid  (first_rx_valid)
     );
 
     // Heartbeats: board clock and FT601 clock, so a missing ft_clk is obvious.
@@ -72,13 +76,21 @@ module ft601_loopback_top #(
     always @(posedge ft_clk)
         blink_ft <= blink_ft + 1'b1;
 
-    assign led[0] = blink_board[24];
-    assign led[1] = blink_ft[24];
-    assign led[2] = ~ft_rxf;
-    assign led[3] = ~fifo_empty;
-    assign led[4] = fifo_full;
-    assign led[5] = rx_active;
-    assign led[6] = tx_active;
-    assign led[7] = overflow_sticky;
+    generate
+        if (MODE == "RX_ONLY") begin : g_rx_led
+            // Lower 8 bits of the latched first RX word (USB status via LEDs).
+            assign led = first_rx_valid ? first_rx_word[7:0]
+                                        : {6'b0, blink_ft[24], blink_board[24]};
+        end else begin : g_dbg_led
+            assign led[0] = blink_board[24];
+            assign led[1] = blink_ft[24];
+            assign led[2] = ~ft_rxf;
+            assign led[3] = ~fifo_empty;
+            assign led[4] = fifo_full;
+            assign led[5] = rx_active;
+            assign led[6] = tx_active;
+            assign led[7] = overflow_sticky;
+        end
+    endgenerate
 
 endmodule
