@@ -65,10 +65,7 @@ module ft601_sync_fifo #(
 
     assign ft_oe = oe_n_r;
     assign ft_rd = rd_n_r;
-    // WR is combo from live TXE (ft.luc). An IOB FF on WR samples TXE a
-    // cycle late and drops one word at each 4 KiB USB drain. DATA/BE stay
-    // IOB so the bus is held a clock before WR at the pin.
-    assign ft_wr = wr_n_c;
+    assign ft_wr = wr_n_r;
     generate
         if (ALWAYS_DRIVE) begin : g_drive
             assign ft_data = data_o_r;
@@ -99,6 +96,8 @@ module ft601_sync_fifo #(
     wire reading = (state == ST_OE) || (state == ST_READ);
     wire writing = (state == ST_WRITE);
 
+    // Live TXE for wr/rget like ft.luc; IOB FF on WR (combo WR is WNS −6.5 ns).
+    // That IOB sample drops one count at each 4 KiB USB/TXE bubble.
     wire can_wr    = writing && tx_valid && (ft_txe == 1'b0) && !rst;
     wire wr_n_c    = can_wr ? 1'b0 : 1'b1;
     wire reading_z = reading && !ALWAYS_DRIVE;
