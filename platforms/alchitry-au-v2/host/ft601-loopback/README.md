@@ -4,6 +4,8 @@ Same 32-bit 245 checker as the Pt loopback: incrementing `uint32` words, fail-cl
 
 ```bash
 python3 ft601_loopback.py --self-test
+# Echo (LOOPBACK bitstream SRAM-loaded; PR #18 4 KiB PHY):
+python3 ft601_loopback.py --backend d3xx --bytes 16384 --chunk-bytes 4096
 # TX-only bitstream already SRAM-loaded (never reuse echo .bit):
 python3 ft601_loopback.py --backend d3xx --bytes 16384 --chunk-bytes 16384 --tx-only
 # RX-only bitstream SRAM-loaded:

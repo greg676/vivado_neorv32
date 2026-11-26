@@ -1,9 +1,11 @@
 vivado_project_ft601/
+vivado_project_la_capture/
 *.jou
 *.log
 *.str
 .Xil/
 __pycache__/
 *.pyc
+*.vvp
 bitstreams/*.bit
 bitstreams/*.ltx
