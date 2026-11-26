@@ -21,8 +21,14 @@
 // DATA is already on the bus — no extra SETUP state. WRITE bursts until
 // TXE or empty, like ft.luc.
 // ALWAYS_DRIVE: TX-only never RD, so never Z (OBUF). OBUFT T-to-O was WNS.
+//
+// DS_FT600Q / AN_386 / AN_412: 245 one-channel FIFO is 4 KiB * 2 ping-pong.
+// Write the 4 KiB as one transaction (1024 x 32-bit, BE=0xF), then raise WR
+// and wait TXE. TN_191 Fig.12: a word with TXE_N=1 is not received. ubfx /
+// CoLA / FPGA-ftdi245fifo: fixed-size bursts so TXE cannot change mid-block.
 module ft601_sync_fifo #(
-    parameter ALWAYS_DRIVE = 0
+    parameter ALWAYS_DRIVE = 0,
+    parameter TX_BURST_WORDS = 1024
 ) (
     input  wire        ft_clk,
     input  wire        rst,
@@ -96,9 +102,12 @@ module ft601_sync_fifo #(
     wire reading = (state == ST_OE) || (state == ST_READ);
     wire writing = (state == ST_WRITE);
 
-    // Live TXE for wr/rget like ft.luc; IOB FF on WR (combo WR is WNS −6.5 ns).
-    // That IOB sample drops one count at each 4 KiB USB/TXE bubble.
-    wire can_wr    = writing && tx_valid && (ft_txe == 1'b0) && !rst;
+    reg [10:0] burst_w;
+    wire burst_room = (burst_w < TX_BURST_WORDS[10:0]);
+
+    // End the 4 KiB transaction by count (not TXE). Live TXE still gates WR
+    // if the ping-pong buffer is not ready. IOB WR; combo WR is WNS −6.5 ns.
+    wire can_wr    = writing && tx_valid && burst_room && (ft_txe == 1'b0) && !rst;
     wire wr_n_c    = can_wr ? 1'b0 : 1'b1;
     wire reading_z = reading && !ALWAYS_DRIVE;
     wire data_oe_c = ~reading_z;
@@ -133,11 +142,16 @@ module ft601_sync_fifo #(
         if (rst) begin
             state      <= ST_IDLE;
             rd_armed   <= 1'b0;
+            burst_w    <= 11'd0;
             rx_valid_r <= 1'b0;
             rx_data_r  <= 32'd0;
             rx_be_r    <= 4'h0;
         end else begin
             rx_valid_r <= 1'b0;
+            if (!writing)
+                burst_w <= 11'd0;
+            else if (can_wr)
+                burst_w <= burst_w + 1'b1;
 
             case (state)
                 ST_IDLE: begin
@@ -174,7 +188,7 @@ module ft601_sync_fifo #(
                 end
 
                 ST_WRITE: begin
-                    if (txe_r || !tx_valid)
+                    if (txe_r || !tx_valid || !burst_room)
                         state <= ST_IDLE;
                     else
                         state <= ST_WRITE;
