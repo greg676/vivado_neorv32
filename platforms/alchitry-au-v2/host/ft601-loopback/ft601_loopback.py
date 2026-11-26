@@ -206,7 +206,14 @@ def run_hw(args: argparse.Namespace) -> int:
                             fails.append((next_idx + i, value, exp))
                         bad += 1
             else:
-                ok, bad, fails = verify_words(got, next_idx)
+                if args.tx_only:
+                    # FPGA free-runs before IN. Require consecutive +1 from
+                    # the first received word, not a start of 0.
+                    base = (first_words[0] if first_words else (got[0] if got else 0))
+                    base = (base + (bytes_done // WORD)) & 0xFFFFFFFF
+                    ok, bad, fails = verify_words(got, base)
+                else:
+                    ok, bad, fails = verify_words(got, next_idx)
             words_ok += ok
             words_bad += bad
             for item in fails:

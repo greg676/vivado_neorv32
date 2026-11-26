@@ -15,8 +15,9 @@
 // this repo always send/expect 4-byte words (BE=0xF on TX).
 //
 // 245: OE one clock, then OE+RD. Registered DATA/BE from a cycle with RD
-// at the pads are taken on the following clock (rd_armed). WRITE: DATA+BE+WR
-// share one IOB load; one word per visit, then IDLE turnaround.
+// at the pads are taken on the following clock (rd_armed). WRITE: DATA+BE
+// (and bus drive) are IOB-loaded one ft_clk before WR so the FT601 samples
+// a stable word on the WR capture edge. One word per visit, then IDLE.
 module ft601_sync_fifo (
     input  wire        ft_clk,
     input  wire        rst,
@@ -40,10 +41,11 @@ module ft601_sync_fifo (
     output wire        tx_ready
 );
 
-    localparam ST_IDLE  = 2'd0;
-    localparam ST_OE    = 2'd1;
-    localparam ST_READ  = 2'd2;
-    localparam ST_WRITE = 2'd3;
+    localparam ST_IDLE     = 3'd0;
+    localparam ST_OE       = 3'd1;
+    localparam ST_READ     = 3'd2;
+    localparam ST_TX_SETUP = 3'd3;
+    localparam ST_WRITE    = 3'd4;
 
     // Input FFs stay in fabric. Packing them in ILOGIC inserts a 7-series
     // ZHOLD_DELAY (~6.25 ns) that fails setup vs FT601 tCO. Clock insertion
@@ -73,7 +75,7 @@ module ft601_sync_fifo (
         be_i_r   <= ft_be;
     end
 
-    reg [1:0]  state;
+    reg [2:0]  state;
     reg        rd_armed;
     reg        rx_valid_r;
     reg [31:0] rx_data_r;
@@ -82,9 +84,9 @@ module ft601_sync_fifo (
     assign rx_valid = rx_valid_r;
     assign rx_data  = rx_data_r;
     assign rx_be    = rx_be_r;
-    // Combinational: pop the FWFT FIFO on the same edge DATA/WR are loaded
-    // into the output IOB FFs. A registered ready delayed the pop by one
-    // cycle and re-drove the previous word.
+    // Pop when WR is at the pads (ST_WRITE), one clock after DATA+BE were
+    // IOB-loaded in ST_TX_SETUP. Popping in SETUP would change DATA on the
+    // WR capture edge.
     assign tx_ready = (state == ST_WRITE) && (txe_r == 1'b0) && !rst;
 
     wire want_read  = (rxf_r == 1'b0) && rx_ready;
@@ -117,12 +119,24 @@ module ft601_sync_fifo (
                         state  <= ST_OE;
                         oe_n_r <= 1'b0;
                     end else if (want_write) begin
-                        state     <= ST_WRITE;
+                        // Drive DATA+BE this clock; WR stays inactive so the
+                        // next edge has a stable bus before WR at the pads.
+                        state     <= ST_TX_SETUP;
                         data_oe_r <= 1'b1;
                         data_o_r  <= tx_data;
                         be_o_r    <= tx_be;
-                        wr_n_r    <= 1'b0;
+                        wr_n_r    <= 1'b1;
                     end
+                end
+
+                ST_TX_SETUP: begin
+                    oe_n_r    <= 1'b1;
+                    rd_n_r    <= 1'b1;
+                    data_oe_r <= 1'b1;
+                    data_o_r  <= data_o_r;
+                    be_o_r    <= be_o_r;
+                    wr_n_r    <= 1'b0;
+                    state     <= ST_WRITE;
                 end
 
                 ST_OE: begin
@@ -169,8 +183,12 @@ module ft601_sync_fifo (
                 end
 
                 ST_WRITE: begin
+                    // WR is at the pads this cycle with DATA+BE held from
+                    // SETUP. Keep the bus driven until WR deasserts next.
                     wr_n_r    <= 1'b1;
-                    data_oe_r <= 1'b0;
+                    data_oe_r <= 1'b1;
+                    data_o_r  <= data_o_r;
+                    be_o_r    <= be_o_r;
                     oe_n_r    <= 1'b1;
                     rd_n_r    <= 1'b1;
                     state     <= ST_IDLE;

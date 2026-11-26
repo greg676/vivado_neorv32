@@ -1,12 +1,13 @@
 # Implementation-only (IOBUF / IOB cells exist). Not used in synthesis.
 # Sourced from rebuild TCL with used_in_synthesis false.
 #
-# Bidirectional T (tristate) is protocol-managed: the PHY always sits in
-# IDLE for a full ft_clk between drive and sample. T does not need the
+# Bidirectional T (tristate) is protocol-managed: DATA+BE are driven a full
+# ft_clk before WR, then IDLE turnaround after WR. T does not need the
 # same-edge tSU as DATA/WR. Timing T as a 100 MHz source-synchronous
-# output was the −0.42 ns WNS on the OBUFT T pin (clock insertion + T-to-O).
+# output is OBUFT T-to-O plus clock insertion (~ −0.5 ns WNS). Match every
+# IOBUF T pin (the previous *ft_* filter missed replicated data_oe nets).
 
-set_false_path -quiet -to [get_pins -quiet -hier -filter {REF_PIN_NAME == T && NAME =~ *ft_*}]
+set_false_path -quiet -to [get_pins -quiet -hier -filter {REF_PIN_NAME == T}]
 
 set_property IOB FALSE [get_cells -quiet -hier -regexp {.*rxf_r_reg$}]
 set_property IOB FALSE [get_cells -quiet -hier -regexp {.*txe_r_reg$}]
