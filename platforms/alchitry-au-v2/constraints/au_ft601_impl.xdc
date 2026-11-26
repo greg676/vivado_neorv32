@@ -8,6 +8,8 @@
 # IOBUF T pin (the previous *ft_* filter missed replicated data_oe nets).
 
 set_false_path -quiet -to [get_pins -quiet -hier -filter {REF_PIN_NAME == T}]
+set_false_path -quiet -from [get_cells -quiet -hier -regexp {.*data_oe_r_reg.*}] \
+    -to [get_ports {ft_data[*] ft_be[*]}]
 
 set_property IOB FALSE [get_cells -quiet -hier -regexp {.*rxf_r_reg$}]
 set_property IOB FALSE [get_cells -quiet -hier -regexp {.*txe_r_reg$}]

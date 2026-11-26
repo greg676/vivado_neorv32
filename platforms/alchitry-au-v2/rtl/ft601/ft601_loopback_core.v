@@ -128,7 +128,9 @@ module ft601_loopback_core #(
         end
     endgenerate
 
-    ft601_sync_fifo u_phy (
+    ft601_sync_fifo #(
+        .ALWAYS_DRIVE (MODE == "TX_ONLY")
+    ) u_phy (
         .ft_clk   (ft_clk),
         .rst      (rst),
         .ft_data  (ft_data),

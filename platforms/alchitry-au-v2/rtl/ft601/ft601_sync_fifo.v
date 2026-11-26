@@ -14,11 +14,16 @@
 // 1 = that byte is part of the transfer; 0 = unused. Host bulk tools in
 // this repo always send/expect 4-byte words (BE=0xF on TX).
 //
-// 245: OE one clock, then OE+RD. Registered DATA/BE from a cycle with RD
-// at the pads are taken on the following clock (rd_armed). WRITE: DATA+BE
-// (and bus drive) are IOB-loaded one ft_clk before WR so the FT601 samples
-// a stable word on the WR capture edge. One word per visit, then IDLE.
-module ft601_sync_fifo (
+// Labs-V2 ft.luc compiles to combinational always @* plus a state dff:
+//   DATA/BE = TX FIFO dout whenever not reading (IDLE and WRITE)
+//   ft_wr   = write_fifo.empty only while state.q == WRITE (else 1)
+// IOB FFs then sample that combo. WR therefore falls one ft_clk after
+// DATA is already on the bus — no extra SETUP state. WRITE bursts until
+// TXE or empty, like ft.luc.
+// ALWAYS_DRIVE: TX-only never RD, so never Z (OBUF). OBUFT T-to-O was WNS.
+module ft601_sync_fifo #(
+    parameter ALWAYS_DRIVE = 0
+) (
     input  wire        ft_clk,
     input  wire        rst,
 
@@ -41,15 +46,11 @@ module ft601_sync_fifo (
     output wire        tx_ready
 );
 
-    localparam ST_IDLE     = 3'd0;
-    localparam ST_OE       = 3'd1;
-    localparam ST_READ     = 3'd2;
-    localparam ST_TX_SETUP = 3'd3;
-    localparam ST_WRITE    = 3'd4;
+    localparam ST_IDLE  = 2'd0;
+    localparam ST_OE    = 2'd1;
+    localparam ST_READ  = 2'd2;
+    localparam ST_WRITE = 2'd3;
 
-    // Input FFs stay in fabric. Packing them in ILOGIC inserts a 7-series
-    // ZHOLD_DELAY (~6.25 ns) that fails setup vs FT601 tCO. Clock insertion
-    // delay already covers pad hold. Output pads still use IOB FFs.
     (* IOB = "FALSE" *) reg        rxf_r;
     (* IOB = "FALSE" *) reg        txe_r;
     (* IOB = "FALSE" *) reg [31:0] data_i_r;
@@ -65,8 +66,15 @@ module ft601_sync_fifo (
     assign ft_oe = oe_n_r;
     assign ft_rd = rd_n_r;
     assign ft_wr = wr_n_r;
-    assign ft_data = data_oe_r ? data_o_r : 32'bz;
-    assign ft_be   = data_oe_r ? be_o_r   : 4'bz;
+    generate
+        if (ALWAYS_DRIVE) begin : g_drive
+            assign ft_data = data_o_r;
+            assign ft_be   = be_o_r;
+        end else begin : g_z
+            assign ft_data = data_oe_r ? data_o_r : 32'bz;
+            assign ft_be   = data_oe_r ? be_o_r   : 4'bz;
+        end
+    endgenerate
 
     always @(posedge ft_clk) begin
         rxf_r    <= ft_rxf;
@@ -75,7 +83,7 @@ module ft601_sync_fifo (
         be_i_r   <= ft_be;
     end
 
-    reg [2:0]  state;
+    reg [1:0]  state;
     reg        rd_armed;
     reg        rx_valid_r;
     reg [31:0] rx_data_r;
@@ -84,24 +92,47 @@ module ft601_sync_fifo (
     assign rx_valid = rx_valid_r;
     assign rx_data  = rx_data_r;
     assign rx_be    = rx_be_r;
-    // Pop when WR is at the pads (ST_WRITE), one clock after DATA+BE were
-    // IOB-loaded in ST_TX_SETUP. Popping in SETUP would change DATA on the
-    // WR capture edge.
-    assign tx_ready = (state == ST_WRITE) && (txe_r == 1'b0) && !rst;
+
+    wire reading = (state == ST_OE) || (state == ST_READ);
+    wire writing = (state == ST_WRITE);
+
+    // Lucid always @* : defaults, then WRITE overrides wr.
+    wire wr_n_c    = writing ? ~tx_valid : 1'b1;
+    wire reading_z = reading && !ALWAYS_DRIVE;
+    wire data_oe_c = ~reading_z;
+    wire oe_n_c    = (state == ST_OE)   ? 1'b0 :
+                     (state == ST_READ) ? ~rx_ready : 1'b1;
+    wire rd_n_c    = (state == ST_READ) ? ~rx_ready : 1'b1;
+
+    // Pop while in WRITE (Lucid rget = !ft_txe). IOB delays WR and DATA
+    // together, so the pad edge still has the pre-pop word.
+    assign tx_ready = writing && (txe_r == 1'b0) && tx_valid && !rst;
 
     wire want_read  = (rxf_r == 1'b0) && rx_ready;
     wire want_write = (txe_r == 1'b0) && tx_valid;
 
     always @(posedge ft_clk) begin
         if (rst) begin
+            oe_n_r    <= 1'b1;
+            rd_n_r    <= 1'b1;
+            wr_n_r    <= 1'b1;
+            data_oe_r <= ALWAYS_DRIVE ? 1'b1 : 1'b0;
+            data_o_r  <= 32'd0;
+            be_o_r    <= 4'hF;
+        end else begin
+            oe_n_r    <= oe_n_c;
+            rd_n_r    <= rd_n_c;
+            wr_n_r    <= wr_n_c;
+            data_oe_r <= data_oe_c;
+            data_o_r  <= tx_data;
+            be_o_r    <= tx_be;
+        end
+    end
+
+    always @(posedge ft_clk) begin
+        if (rst) begin
             state      <= ST_IDLE;
             rd_armed   <= 1'b0;
-            oe_n_r     <= 1'b1;
-            rd_n_r     <= 1'b1;
-            wr_n_r     <= 1'b1;
-            data_oe_r  <= 1'b0;
-            data_o_r   <= 32'd0;
-            be_o_r     <= 4'hF;
             rx_valid_r <= 1'b0;
             rx_data_r  <= 32'd0;
             rx_be_r    <= 4'h0;
@@ -110,88 +141,43 @@ module ft601_sync_fifo (
 
             case (state)
                 ST_IDLE: begin
-                    oe_n_r    <= 1'b1;
-                    rd_n_r    <= 1'b1;
-                    wr_n_r    <= 1'b1;
-                    data_oe_r <= 1'b0;
-                    rd_armed  <= 1'b0;
-                    if (want_read) begin
-                        state  <= ST_OE;
-                        oe_n_r <= 1'b0;
-                    end else if (want_write) begin
-                        // Drive DATA+BE this clock; WR stays inactive so the
-                        // next edge has a stable bus before WR at the pads.
-                        state     <= ST_TX_SETUP;
-                        data_oe_r <= 1'b1;
-                        data_o_r  <= tx_data;
-                        be_o_r    <= tx_be;
-                        wr_n_r    <= 1'b1;
-                    end
-                end
-
-                ST_TX_SETUP: begin
-                    oe_n_r    <= 1'b1;
-                    rd_n_r    <= 1'b1;
-                    data_oe_r <= 1'b1;
-                    data_o_r  <= data_o_r;
-                    be_o_r    <= be_o_r;
-                    wr_n_r    <= 1'b0;
-                    state     <= ST_WRITE;
+                    rd_armed <= 1'b0;
+                    if (want_read)
+                        state <= ST_OE;
+                    else if (want_write)
+                        state <= ST_WRITE;
                 end
 
                 ST_OE: begin
-                    // OE at pads this cycle. Drop RD so the next edge has
-                    // OE+RD at the FT601 (datasheet turnaround).
-                    oe_n_r    <= 1'b0;
-                    rd_n_r    <= 1'b0;
-                    wr_n_r    <= 1'b1;
-                    data_oe_r <= 1'b0;
-                    rd_armed  <= 1'b0;
-                    state     <= ST_READ;
+                    rd_armed <= 1'b0;
+                    state    <= ST_READ;
                 end
 
                 ST_READ: begin
-                    wr_n_r    <= 1'b1;
-                    data_oe_r <= 1'b0;
-                    // First READ clock: RD is at the pads; pad FFs still hold
-                    // the OE-only sample. Arm and wait one clock.
                     if (!rd_armed) begin
                         rd_armed <= 1'b1;
-                        oe_n_r   <= 1'b0;
-                        rd_n_r   <= 1'b0;
                         state    <= ST_READ;
                     end else if (rxf_r == 1'b0) begin
                         rx_valid_r <= 1'b1;
                         rx_data_r  <= data_i_r;
                         rx_be_r    <= be_i_r;
-                        if (rx_ready) begin
-                            oe_n_r <= 1'b0;
-                            rd_n_r <= 1'b0;
-                            state  <= ST_READ;
-                        end else begin
-                            oe_n_r   <= 1'b1;
-                            rd_n_r   <= 1'b1;
+                        if (rx_ready)
+                            state <= ST_READ;
+                        else begin
                             rd_armed <= 1'b0;
                             state    <= ST_IDLE;
                         end
                     end else begin
-                        oe_n_r   <= 1'b1;
-                        rd_n_r   <= 1'b1;
                         rd_armed <= 1'b0;
                         state    <= ST_IDLE;
                     end
                 end
 
                 ST_WRITE: begin
-                    // WR is at the pads this cycle with DATA+BE held from
-                    // SETUP. Keep the bus driven until WR deasserts next.
-                    wr_n_r    <= 1'b1;
-                    data_oe_r <= 1'b1;
-                    data_o_r  <= data_o_r;
-                    be_o_r    <= be_o_r;
-                    oe_n_r    <= 1'b1;
-                    rd_n_r    <= 1'b1;
-                    state     <= ST_IDLE;
+                    if (txe_r || !tx_valid)
+                        state <= ST_IDLE;
+                    else
+                        state <= ST_WRITE;
                 end
 
                 default: state <= ST_IDLE;
