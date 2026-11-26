@@ -1,0 +1,7 @@
+vivado_project_ft601/
+*.jou
+*.log
+*.str
+.Xil/
+bitstreams/*.bit
+bitstreams/*.ltx
