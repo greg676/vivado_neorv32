@@ -1,0 +1,75 @@
+# Alchitry Au V2 + Ft+ FT601 245 loopback
+
+Dedicated **32-bit 245 echo** for **Alchitry Au** (`xc7a35ticsg324-1`) and **Ft+ on TOP**.
+Published **V2** pinout from Alchitry `au_ft_plus.xdc`. Does **not** instantiate NeoRV32.
+
+Do **not** load a Pt / `xc7a100t` bitstream onto this part.
+
+## Build
+
+```bash
+cd platforms/alchitry-au-v2
+vivado -mode batch -source tcl/rebuild_ft601_loopback.tcl
+# bitstream: bitstreams/ft601_loopback_top_v2.bit
+```
+
+## SRAM load (openFPGALoader)
+
+```bash
+# RAM only — never --write-flash / -f / .mcs / QSPI
+openFPGALoader --detect
+# confirm idcode artix a7 35t / xc7a35 each load
+```
+
+Reload SRAM for **each** test. Do **not** reuse the echo bitstream.
+
+```bash
+# TX-only (FPGA never RD). Then host IN only.
+vivado -mode batch -source tcl/rebuild_ft601_loopback.tcl -tclargs
+# or:  set ft601_mode TX_ONLY  in a wrapper
+openFPGALoader --fpga-part xc7a35tftg256 --write-sram bitstreams/ft601_tx_only_top_v2.bit
+# Throughput: overlapped D3XX IN (256 KiB..1 MiB, several URBs). Not 16 KiB Python.
+make -C host/ft601-loopback d3xx D3XX_DIR=$HOME/ft601-host/d3xx/unpack/linux-arm-v8
+./host/ft601-loopback/ft601_loopback_d3xx --tx-only --bytes 16777216 \
+    --chunk-bytes 262144 --nflight 4
+python3 host/ft601-loopback/ft601_loopback.py --backend d3xx --bytes 16384 --chunk-bytes 16384 --tx-only
+
+# RX-only (FPGA RD while RXF). Then host OUT known pattern.
+openFPGALoader --fpga-part xc7a35tftg256 --write-sram bitstreams/ft601_rx_only_top_v2.bit
+python3 host/ft601-loopback/ft601_loopback.py --backend d3xx --bytes 16384 --chunk-bytes 16384 --rx-only
+
+# Echo loopback (PR #18 PHY: Lucid DATA-before-WR, 4 KiB write bursts).
+vivado -mode batch -source tcl/rebuild_ft601_loopback.tcl
+openFPGALoader --fpga-part xc7a35tftg256 --write-sram bitstreams/ft601_loopback_top_v2.bit
+python3 host/ft601-loopback/ft601_loopback.py --backend d3xx --bytes 16384 --chunk-bytes 4096
+```
+
+## LA capture (dual 4 KiB BRAM → PR #18 PHY → PulseView `.sr`)
+
+Dedicated top. Two FIFO36E1 FWFT banks (8 KiB) sit in front of the PHY so
+the sampler never stalls on TXE and `tx_valid` stays solid through each
+4 KiB WR burst. Host IN only. Writes a sigrok v2 `.sr` (keep zips out of
+Project `docs/`). Target is 32-bit @ 100 MHz ≈ 400 MB/s.
+
+```bash
+vivado -mode batch -source tcl/rebuild_la_capture.tcl
+# bitstream: bitstreams/la_capture_top_v2.bit
+openFPGALoader --fpga-part xc7a35tftg256 --write-sram bitstreams/la_capture_top_v2.bit
+python3 host/ft601-capture/ft601_capture.py --backend d3xx --bytes 16384 --chunk-bytes 4096 \
+    --sr /tmp/au-la-counter.sr
+# Throughput (Jetson overlapped D3XX IN). Report MiB/s vs 381.47 theoretical.
+./host/ft601-loopback/ft601_loopback_d3xx --packed-counter --bytes 16777216 \
+    --chunk-bytes 262144 --nflight 4
+```
+
+## PVLA catalog IP (Block Design)
+
+Same PR #18/#19 PHY, packaged as `greg676:user:pvla:1.0`. Add `<repo>/ip` once. Does not instantiate NeoRV32 or MIG.
+
+```bash
+# Settings → IP → Repository → <repo>/ip
+cd platforms/alchitry-au-v2
+vivado -mode batch -source tcl/pvla_bd_example.tcl
+# wrapper: pvla_bd_wrapper. C_BOARD=AU_V2. FT601 pads auto-promoted, not BD nets.
+python3 ../../ip/pvla/scripts/check_pvla_ip.py
+```

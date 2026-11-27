@@ -1,0 +1,12 @@
+vivado_project_ft601/
+vivado_project_la_capture/
+vivado_project_pvla_bd/
+*.jou
+*.log
+*.str
+.Xil/
+__pycache__/
+*.pyc
+*.vvp
+bitstreams/*.bit
+bitstreams/*.ltx
