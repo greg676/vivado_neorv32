@@ -87,6 +87,12 @@ Exit `0` is PASS. Any mismatch, short/odd transfer, or incomplete byte count is 
 
 If `FT_Create` fails after reset, wait a couple of seconds for USB re-enumeration.
 
+## Phase 2 (separate capture top)
+
+Eight-channel sampler / packer / FT601 TX is a **different bitstream**:
+[../ft601-capture/README.md](../ft601-capture/README.md).
+This loopback top is unchanged.
+
 ## RTL simulation (no Vivado)
 
 ```bash
