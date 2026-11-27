@@ -258,7 +258,7 @@ Drop me:
 3. **Block design TCL** (optional but helpful) — if you generate from Vivado, I can review it
 
 ### Phase 1: I validate the design
-- Cross-reference every pin against `~/Desktop/alchitry.xdc` (ground truth)
+- Cross-reference every pin against `<workspace>/alchitry.xdc` (ground truth)
 - Audit NeoRV32 generics against our capability needs
 - Check clock domain crossings, reset sequencing
 - Verify address map — no DMEM/MIG collision, SLINK at 0xffec0000, DMA at 0xffed0000, SPI at its base

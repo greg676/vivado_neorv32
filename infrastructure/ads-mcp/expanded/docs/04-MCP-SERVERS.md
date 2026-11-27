@@ -52,7 +52,7 @@ Uses `@modelcontextprotocol/server-filesystem` reference server, wrapped with pr
 ```bash
 # Wrapper script: run-filesystem-mcp.sh
 npx @modelcontextprotocol/server-filesystem \
-  --roots-from-profile /mnt/data-1tb/ai-design-studio/project.profile.json
+  --roots-from-profile /mnt/<data-disk>/ai-design-studio/project.profile.json
 ```
 
 ---
@@ -90,7 +90,7 @@ Uses official GitHub MCP server.
 # Wrapper script: run-github-mcp.sh
 export GITHUB_TOKEN=$(gh auth token)
 npx @modelcontextprotocol/server-github \
-  --repos-from-profile /mnt/data-1tb/ai-design-studio/project.profile.json
+  --repos-from-profile /mnt/<data-disk>/ai-design-studio/project.profile.json
 ```
 
 ---
@@ -131,8 +131,8 @@ Uses Puppeteer MCP server.
 ```bash
 # Wrapper script: run-browser-mcp.sh
 npx @anthropic/mcp-server-puppeteer \
-  --allowlist-from-profile /mnt/data-1tb/ai-design-studio/project.profile.json \
-  --screenshot-dir /mnt/data-1tb/ai-design-studio/browser-captures/
+  --allowlist-from-profile /mnt/<data-disk>/ai-design-studio/project.profile.json \
+  --screenshot-dir /mnt/<data-disk>/ai-design-studio/browser-captures/
 ```
 
 ---
@@ -162,16 +162,16 @@ All four servers are registered in mcpo:
 {
   "mcpServers": {
     "r7-filesystem": {
-      "command": "/mnt/data-1tb/ai-design-studio/mcp-servers/run-filesystem-mcp.sh"
+      "command": "/mnt/<data-disk>/ai-design-studio/mcp-servers/run-filesystem-mcp.sh"
     },
     "github-project": {
-      "command": "/mnt/data-1tb/ai-design-studio/mcp-servers/run-github-mcp.sh"
+      "command": "/mnt/<data-disk>/ai-design-studio/mcp-servers/run-github-mcp.sh"
     },
     "browser-puppeteer": {
-      "command": "/mnt/data-1tb/ai-design-studio/mcp-servers/run-browser-mcp.sh"
+      "command": "/mnt/<data-disk>/ai-design-studio/mcp-servers/run-browser-mcp.sh"
     },
     "hardware-debug": {
-      "command": "/mnt/data-1tb/ai-design-studio/mcp-servers/run-hardware-mcp.sh"
+      "command": "/mnt/<data-disk>/ai-design-studio/mcp-servers/run-hardware-mcp.sh"
     }
   }
 }

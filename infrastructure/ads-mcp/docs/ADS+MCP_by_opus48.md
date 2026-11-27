@@ -5,8 +5,8 @@
 **Project:** ADS+MCP — AI Design Studio Cockpit  
 **Version:** 1.0 (Architecture Locked)  
 **Date:** 2026-06-22  
-**Host:** R7 (gj-007, 10.0.0.50)  
-**Mesh:** claw-studio.tail708254.ts.net  
+**Host:** R7 (<dev-host>, <lan-r7>)  
+**Mesh:** <tailnet-host>.ts.net  
 **Status:** Implementation Ready
 
 ---
@@ -47,29 +47,29 @@ Safety comes not from trusting the model, but from architecture that makes unsaf
 
 | Machine | GPU | VRAM | Role in ADS+MCP |
 |---------|-----|------|-----------------|
-| R7 (gj-007, 10.0.0.50) | RX 7900 XT | 20GB | Primary cockpit + heavy local inference |
-| R5 (gary, 10.0.0.231) | RX 6600 | 8GB | Small-model exploration lab + embeddings |
-| Arty Z7-20 (10.0.0.245) | — | — | Codec hardware target |
-| Kria KV260 (10.0.0.150) | — | — | Edge vision target |
+| R7 (<dev-host>, <lan-r7>) | RX 7900 XT | 20GB | Primary cockpit + heavy local inference |
+| R5 (<lab-host>, <lan-r5>) | RX 6600 | 8GB | Small-model exploration lab + embeddings |
+| Arty Z7-20 (<lan-arty>) | — | — | Codec hardware target |
+| Kria KV260 (<lan-kria>) | — | — | Edge vision target |
 
 ### 5. Storage
 
 | Drive | Size | Free | Purpose |
 |-------|------|------|---------|
 | nvme0n1 (/) | 465GB | ~107GB | OS, projects, OpenClaw workspaces |
-| sdb1 (/mnt/data-1tb) | 931GB | ~800GB | All ADS+MCP data, Ollama models, OWUI data |
+| sdb1 (/mnt/<data-disk>) | 931GB | ~800GB | All ADS+MCP data, Ollama models, OWUI data |
 
-**Rule:** all ADS+MCP data, sessions, models, and KB live on `/mnt/data-1tb`. Config and code may symlink from elsewhere, but data lives on the big drive.
+**Rule:** all ADS+MCP data, sessions, models, and KB live on `/mnt/<data-disk>`. Config and code may symlink from elsewhere, but data lives on the big drive.
 
 ### 6. Software Baseline
 
 | Component | Location | Status |
 |-----------|----------|--------|
-| OWUI v0.9.6 | R7 Docker, port 8080 | Running, data on /mnt/data-1tb |
+| OWUI v0.9.6 | R7 Docker, port 8080 | Running, data on /mnt/<data-disk> |
 | Ollama | R7 systemd, port 11434 | 16 models, 7900 XT |
 | Ollama | R5 systemd, port 11434 | Small models + embeddings, 6600 |
 | OpenClaw | R7, multiple gateways | GodBot, codecbot, audiobot, blackbot, greybot |
-| Tailscale | Mesh across all machines | claw-studio.tail708254.ts.net |
+| Tailscale | Mesh across all machines | <tailnet-host>.ts.net |
 | OpenRouter pipe | R7 OWUI | Cloud models imported |
 
 ---
@@ -80,7 +80,7 @@ Safety comes not from trusting the model, but from architecture that makes unsaf
 
 All four MCP servers load a shared `project.profile.json` at startup. This is what makes four servers a system instead of four disconnected tools. It binds them to the same project identity, hardware identity, filesystem roots, repos, and known-good state.
 
-**Location:** `/mnt/data-1tb/ai-design-studio/project.profile.json`
+**Location:** `/mnt/<data-disk>/ai-design-studio/project.profile.json`
 
 ```json
 {
@@ -88,23 +88,23 @@ All four MCP servers load a shared `project.profile.json` at startup. This is wh
   "project": {
     "name": "<active-project>",
     "version": "0.4.x",
-    "session_dir": "/mnt/data-1tb/ai-design-studio/debug-sessions/",
-    "workspace_dir": "/mnt/data-1tb/ai-design-studio/workspace/"
+    "session_dir": "/mnt/<data-disk>/ai-design-studio/debug-sessions/",
+    "workspace_dir": "/mnt/<data-disk>/ai-design-studio/workspace/"
   },
   "filesystem": {
     "read_roots": [
       "~/projects/",
-      "/mnt/data-1tb/ai-design-studio/",
-      "~/.openclaw-godbot/workspace/",
-      "~/.openclaw-codecbot/workspaces/codecbot/",
+      "/mnt/<data-disk>/ai-design-studio/",
+      "~/.openclaw-<orchestrator>/workspace/",
+      "~/.openclaw-<agent>/workspaces/codecbot/",
       "~/Downloads/"
     ],
     "write_roots": [
       "~/projects/<active-project>/",
-      "/mnt/data-1tb/ai-design-studio/workspace/",
-      "/mnt/data-1tb/ai-design-studio/debug-sessions/"
+      "/mnt/<data-disk>/ai-design-studio/workspace/",
+      "/mnt/<data-disk>/ai-design-studio/debug-sessions/"
     ],
-    "trash_dir": "/mnt/data-1tb/ai-design-studio/.trash"
+    "trash_dir": "/mnt/<data-disk>/ai-design-studio/.trash"
   },
   "github": {
     "username": "<github-user>",
@@ -138,7 +138,7 @@ All four MCP servers load a shared `project.profile.json` at startup. This is wh
     "codec_register_profile": "profiles/tdm-8ch-known-good.json"
   },
   "browser": {
-    "screenshot_dir": "/mnt/data-1tb/ai-design-studio/browser-captures/",
+    "screenshot_dir": "/mnt/<data-disk>/ai-design-studio/browser-captures/",
     "url_allowlist": [
       "http://127.0.0.1:*",
       "http://localhost:*",
@@ -150,7 +150,7 @@ All four MCP servers load a shared `project.profile.json` at startup. This is wh
       "docs.xilinx.com"
     ]
   },
-  "audit_log": "/mnt/data-1tb/ai-design-studio/audit/audit.jsonl"
+  "audit_log": "/mnt/<data-disk>/ai-design-studio/audit/audit.jsonl"
 }
 ```
 
@@ -165,7 +165,7 @@ One OWUI instance on R7 is the cockpit. It pools both Ollama backends and all cl
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │ R7 OWUI — THE SOLE COCKPIT (port 8080)                       │
-│ https://claw-studio.tail708254.ts.net:8445                   │
+│ https://<tailnet-host>.ts.net:8445                   │
 │                                                              │
 │ ROLE MODELS (system prompt + tools + permissions):            │
 │                                                              │
@@ -419,7 +419,7 @@ mcpo runs as a systemd user service on R7, surviving reboots.
 | **2** | Controlled mutations | Allowed, logged, confirmed | Human confirms in chat |
 | **3** | Dangerous | Explicit confirmation + identity match | Pending operation with expiry |
 
-Audit log format (`/mnt/data-1tb/ai-design-studio/audit/audit.jsonl`):
+Audit log format (`/mnt/<data-disk>/ai-design-studio/audit/audit.jsonl`):
 ```json
 {"ts":"2026-06-22T19:00:00Z","server":"hardware-debug","tool":"codec.apply_known_good_config","tier":2,"model":"ai-design-orchestrator","session":"debug-2026-06-22-001","args_hash":"abc123","result":"ok","duration_ms":231,"confirmed_by":"human"}
 ```
@@ -429,7 +429,7 @@ Audit log format (`/mnt/data-1tb/ai-design-studio/audit/audit.jsonl`):
 Every conversation with the orchestrator produces a self-contained directory that feeds back into the KB:
 
 ```
-/mnt/data-1tb/ai-design-studio/debug-sessions/
+/mnt/<data-disk>/ai-design-studio/debug-sessions/
   2026-06-22-1035-codec-output-dead/
     ├── session.json              ← metadata: model, session ID, duration
     ├── conversation.md           ← human-readable transcript
@@ -446,7 +446,7 @@ Every conversation with the orchestrator produces a self-contained directory tha
 ### 21. Data Layout
 
 ```
-/mnt/data-1tb/
+/mnt/<data-disk>/
 ├── ollama/models/                    ← Ollama blobs
 ├── open-webui/                       ← OWUI persistent data
 │   ├── webui.db
@@ -491,11 +491,11 @@ Every conversation with the orchestrator produces a self-contained directory tha
 - Regenerate stale OWUI admin JWT token (fresh login)
 - Document exact docker run command with all mounts + env
 - Confirm Tailscale URL access (:8445)
-- Confirm Ollama models + OWUI data on /mnt/data-1tb
+- Confirm Ollama models + OWUI data on /mnt/<data-disk>
 - Tag all R5 Ollama models with -r5; optionally tag R7 with -r7
 
 **Phase 1 — Filesystem + GitHub MCP + Orchestrator (Days 1–3)**
-- Create /mnt/data-1tb/ai-design-studio/ tree
+- Create /mnt/<data-disk>/ai-design-studio/ tree
 - Create project.profile.json
 - Install + wrap @modelcontextprotocol/server-filesystem
 - Install + wrap GitHub MCP server (token from gh auth)
@@ -601,8 +601,8 @@ The current OpenClaw codecbot (gateway 18793) is **not deleted** — it becomes 
 | Hardware MCP language | **Python 3.12** (pylink-square, pyserial, smbus2) |
 | Debug channel | **RTT primary, UART secondary** |
 | GitHub formality | **Full — issues, PRs, CI, public-facing quality** |
-| KB | **Single collection** on /mnt/data-1tb/.../knowledge/, no cross-OWUI sync needed |
-| Data location | **All on /mnt/data-1tb** |
+| KB | **Single collection** on /mnt/<data-disk>/.../knowledge/, no cross-OWUI sync needed |
+| Data location | **All on /mnt/<data-disk>** |
 | Project coupling | **None.** Any project plugs in via project.profile.json |
 
 ---

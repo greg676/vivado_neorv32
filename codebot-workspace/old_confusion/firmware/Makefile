@@ -5,7 +5,7 @@ CC       := $(PREFIX)gcc
 OBJCOPY  := $(PREFIX)objcopy
 SIZE     := $(PREFIX)size
 
-NEORV32_HOME := /home/greg-jack/vivado_projects/Neorv32_demos/NeoRV32_AuV1/neorv32
+NEORV32_HOME := $(HOME)/neorv32
 
 BUILDDIR := build
 

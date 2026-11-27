@@ -28,7 +28,7 @@ from typing import Optional
 
 PROFILE_PATH = os.environ.get(
     "ADS_PROFILE",
-    "/mnt/data-1tb/ai-design-studio/project.profile.json"
+    "/mnt/<data-disk>/ai-design-studio/project.profile.json"
 )
 
 with open(PROFILE_PATH) as f:

@@ -19,7 +19,7 @@ Three patterns validated and cross-referenced:
 
 ### 1. audiobot's proven CS42448 init (from Arty Z7-20 project)
 - Used as the ground truth for TDM register values
-- Stored in `/home/greg-jack/.openclaw-audio-companion/workspaces/audiobot/memory/`
+- Stored in `$HOME/.openclaw-audio-companion/workspaces/audiobot/memory/`
 - Key insight: **reg 0x04 = 0x36** for TDM mode (not the default 0x01 = Left-Justified)
 - The debug_console uses a variant: **FUNCMOD=0xF001** which packs the TDM config differently
 
@@ -161,7 +161,7 @@ clk on
 
 2. **IO_GPIO_DIR_EN=false** locks all GPIO to input direction, but the output register still drives the physical pins (the wrapper hard-wires gpio_o_0 as outputs). The `neorv32_gpio_pin_get()` function reads the input register, so `gpio dump` shows input state, not output drive. If output pin isn't physically connected to anything, the input reads back as 0.
 
-3. **The stale XDC files in vivado_projects/** (`ptv2_basic.xdc`, `ptv2_basic_plus.xdc`) had wrong JTAG pin mappings. The **real pin map** is in `/home/greg-jack/Desktop/alchitry.xdc` (the original Alchitry board file). The built bitstream uses the correct pins.
+3. **The stale XDC files in vivado_projects/** (`ptv2_basic.xdc`, `ptv2_basic_plus.xdc`) had wrong JTAG pin mappings. The **real pin map** is in `<workspace>/alchitry.xdc` (the original Alchitry board file). The built bitstream uses the correct pins.
 
 4. **My first I²C probe attempt with prsc=3, cdiv=5 failed** because the NeoRV32 TWI needs the proven `prsc=6, cdiv=15` for reliable operation.
 
@@ -174,7 +174,7 @@ clk on
 # 2. Flash debug_console firmware via J-Link
 cat > /tmp/flash.txt << 'EOF'
 connect
-loadbin /home/greg-jack/Desktop/designs/ptv2/vivado_neorv32/firmware/debug_console/elf.bin 0x00000000
+loadbin elf.bin 0x00000000
 wreg pc 0x00000000
 go
 exit

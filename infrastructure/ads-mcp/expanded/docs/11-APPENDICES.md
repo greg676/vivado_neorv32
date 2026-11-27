@@ -51,7 +51,7 @@ On first message each session:
 
 ## Project Context
 
-Active project profile: /mnt/data-1tb/ai-design-studio/project.profile.json
+Active project profile: /mnt/<data-disk>/ai-design-studio/project.profile.json
 Debug session dir: [auto-populated from profile]
 ```
 
@@ -127,11 +127,11 @@ After=network.target
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/mcpo \
-  --config /mnt/data-1tb/ai-design-studio/mcp-servers/mcpo-config.json \
+  --config /mnt/<data-disk>/ai-design-studio/mcp-servers/mcpo-config.json \
   --port 8200
 Restart=on-failure
 RestartSec=5
-Environment=ADS_PROFILE=/mnt/data-1tb/ai-design-studio/project.profile.json
+Environment=ADS_PROFILE=/mnt/<data-disk>/ai-design-studio/project.profile.json
 
 [Install]
 WantedBy=default.target
@@ -145,7 +145,7 @@ WantedBy=default.target
 
 ```bash
 #!/bin/bash
-export ADS_PROFILE=/mnt/data-1tb/ai-design-studio/project.profile.json
+export ADS_PROFILE=/mnt/<data-disk>/ai-design-studio/project.profile.json
 exec npx @modelcontextprotocol/server-filesystem \
   --roots-from-profile "$ADS_PROFILE"
 ```
@@ -155,7 +155,7 @@ exec npx @modelcontextprotocol/server-filesystem \
 ```bash
 #!/bin/bash
 export GITHUB_TOKEN=$(gh auth token)
-export ADS_PROFILE=/mnt/data-1tb/ai-design-studio/project.profile.json
+export ADS_PROFILE=/mnt/<data-disk>/ai-design-studio/project.profile.json
 exec npx @modelcontextprotocol/server-github \
   --repos-from-profile "$ADS_PROFILE"
 ```
@@ -164,18 +164,18 @@ exec npx @modelcontextprotocol/server-github \
 
 ```bash
 #!/bin/bash
-export ADS_PROFILE=/mnt/data-1tb/ai-design-studio/project.profile.json
+export ADS_PROFILE=/mnt/<data-disk>/ai-design-studio/project.profile.json
 exec npx @anthropic/mcp-server-puppeteer \
   --allowlist-from-profile "$ADS_PROFILE" \
-  --screenshot-dir /mnt/data-1tb/ai-design-studio/browser-captures/
+  --screenshot-dir /mnt/<data-disk>/ai-design-studio/browser-captures/
 ```
 
 ### C.4 run-hardware-mcp.sh
 
 ```bash
 #!/bin/bash
-export ADS_PROFILE=/mnt/data-1tb/ai-design-studio/project.profile.json
-exec python3 /mnt/data-1tb/ai-design-studio/mcp/hardware-debug/server.py
+export ADS_PROFILE=/mnt/<data-disk>/ai-design-studio/project.profile.json
+exec python3 /mnt/<data-disk>/ai-design-studio/mcp/hardware-debug/server.py
 ```
 
 ---
@@ -187,8 +187,8 @@ docker run -d \
   --name open-webui \
   --restart unless-stopped \
   -p 8080:8080 \
-  -v /mnt/data-1tb/open-webui:/app/backend/data \
-  -v /mnt/data-1tb/ai-design-studio/knowledge:/app/backend/data/uploads \
+  -v /mnt/<data-disk>/open-webui:/app/backend/data \
+  -v /mnt/<data-disk>/ai-design-studio/knowledge:/app/backend/data/uploads \
   -e OLLAMA_BASE_URL=http://host.docker.internal:11434 \
   -e WEBUI_SECRET_KEY=<from-container> \
   --ulimit nofile=65536:65536 \
@@ -220,7 +220,7 @@ curl http://host.docker.internal:8200/health
 
 ### View audit log
 ```bash
-tail -f /mnt/data-1tb/ai-design-studio/audit/audit.jsonl | jq .
+tail -f /mnt/<data-disk>/ai-design-studio/audit/audit.jsonl | jq .
 ```
 
 ### Tag new R5 model
@@ -230,7 +230,7 @@ ssh r5 'ollama pull <model> && ollama cp <model> <model>-r5 && ollama rm <model>
 
 ### Switch project
 ```bash
-vim /mnt/data-1tb/ai-design-studio/project.profile.json
+vim /mnt/<data-disk>/ai-design-studio/project.profile.json
 systemctl --user restart mcpo
 ```
 

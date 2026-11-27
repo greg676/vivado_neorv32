@@ -11,7 +11,7 @@
 
 All four MCP servers load a shared `project.profile.json` at startup. This is what makes four servers a **system** instead of four disconnected tools. It binds them to the same project identity, hardware identity, filesystem roots, repos, and known-good state.
 
-**Location:** `/mnt/data-1tb/ai-design-studio/project.profile.json`
+**Location:** `/mnt/<data-disk>/ai-design-studio/project.profile.json`
 
 ---
 
@@ -23,23 +23,23 @@ All four MCP servers load a shared `project.profile.json` at startup. This is wh
   "project": {
     "name": "<active-project>",
     "version": "0.4.x",
-    "session_dir": "/mnt/data-1tb/ai-design-studio/debug-sessions/",
-    "workspace_dir": "/mnt/data-1tb/ai-design-studio/workspace/"
+    "session_dir": "/mnt/<data-disk>/ai-design-studio/debug-sessions/",
+    "workspace_dir": "/mnt/<data-disk>/ai-design-studio/workspace/"
   },
   "filesystem": {
     "read_roots": [
       "~/projects/",
-      "/mnt/data-1tb/ai-design-studio/",
-      "~/.openclaw-godbot/workspace/",
-      "~/.openclaw-codecbot/workspaces/codecbot/",
+      "/mnt/<data-disk>/ai-design-studio/",
+      "~/.openclaw-<orchestrator>/workspace/",
+      "~/.openclaw-<agent>/workspaces/codecbot/",
       "~/Downloads/"
     ],
     "write_roots": [
       "~/projects/<active-project>/",
-      "/mnt/data-1tb/ai-design-studio/workspace/",
-      "/mnt/data-1tb/ai-design-studio/debug-sessions/"
+      "/mnt/<data-disk>/ai-design-studio/workspace/",
+      "/mnt/<data-disk>/ai-design-studio/debug-sessions/"
     ],
-    "trash_dir": "/mnt/data-1tb/ai-design-studio/.trash"
+    "trash_dir": "/mnt/<data-disk>/ai-design-studio/.trash"
   },
   "github": {
     "username": "<github-user>",
@@ -76,7 +76,7 @@ All four MCP servers load a shared `project.profile.json` at startup. This is wh
     "codec_register_profile": "profiles/tdm-8ch-known-good.json"
   },
   "browser": {
-    "screenshot_dir": "/mnt/data-1tb/ai-design-studio/browser-captures/",
+    "screenshot_dir": "/mnt/<data-disk>/ai-design-studio/browser-captures/",
     "url_allowlist": [
       "http://127.0.0.1:*",
       "http://localhost:*",
@@ -88,7 +88,7 @@ All four MCP servers load a shared `project.profile.json` at startup. This is wh
       "docs.xilinx.com"
     ]
   },
-  "audit_log": "/mnt/data-1tb/ai-design-studio/audit/audit.jsonl"
+  "audit_log": "/mnt/<data-disk>/ai-design-studio/audit/audit.jsonl"
 }
 ```
 
@@ -156,7 +156,7 @@ import json, os
 
 PROFILE_PATH = os.environ.get(
     "ADS_PROFILE",
-    "/mnt/data-1tb/ai-design-studio/project.profile.json"
+    "/mnt/<data-disk>/ai-design-studio/project.profile.json"
 )
 
 with open(PROFILE_PATH) as f:

@@ -5,7 +5,7 @@
 set -e
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-AGENT_WORKSPACE="${HOME}/.openclaw-codecbot/workspaces/codecbot"
+AGENT_WORKSPACE="${AGENT_WORKSPACE:-${HOME}/.openclaw-<agent>/workspaces/codecbot}"
 COMMIT_MSG="${1:-$(date '+%Y-%m-%d %H:%M:%S') automatic save}"
 
 echo "=== Alchitry Pt V2 NeoRV32 — Save to GitHub ==="

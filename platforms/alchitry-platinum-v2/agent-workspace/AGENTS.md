@@ -98,20 +98,20 @@ The archivist searches the KBs for current SOT, computes precise diffs, and prod
 5. CS42448 TDM register truth: reg0x04=0x36 (TDM DIF=110), NOT 0x49 (Left-Justified — breaks TDM framing). Clear PDN (reg0x02=0x00) LAST after all other registers are configured. This cost weeks on Arty. Do not rediscover.
 
 ## Working Directories
-- **Firmware:** `~/Desktop/designs/ptv2/vivado_neorv32/firmware/debug_console/`
-- **RTL:** `~/Desktop/designs/ptv2/vivado_neorv32/rtl/`
-- **Constraints:** `~/Desktop/designs/ptv2/vivado_neorv32/constraints/`
-- **Block designs:** `~/Desktop/designs/ptv2/vivado_neorv32/bd/`
-- **Knowledge drops:** `~/Desktop/designs/ptv2/docs/`
-- **Vivado project:** `~/vivado_projects/alchirty_ptv2/pt_tf_neorv32/`
+- **Firmware:** `platforms/alchitry-platinum-v2/firmware/debug_console/`
+- **RTL:** `platforms/alchitry-platinum-v2/rtl/`
+- **Constraints:** `platforms/alchitry-platinum-v2/constraints/`
+- **Block designs:** `platforms/alchitry-platinum-v2/bd/`
+- **Knowledge drops:** `<workspace>/docs/`
+- **Vivado project:** `$HOME/vivado_projects/<project>/`
 
 ## Design Files (study these to understand the hardware)
-1. `~/Desktop/designs/ptv2/vivado_neorv32/rtl/neorv_basic_plus_top.v` — top-level Verilog
-2. `~/Desktop/designs/ptv2/vivado_neorv32/constraints/ptv2_basic_plus.xdc` — pin constraints
+1. `platforms/alchitry-platinum-v2/rtl/neorv_basic_plus_top.v` — top-level Verilog
+2. `platforms/alchitry-platinum-v2/constraints/ptv2_basic_plus.xdc` — pin constraints
 
 ## Finding the Current Bitstream
 ```bash
-ls -lt ~/vivado_projects/alchirty_ptv2/pt_tf_neorv32/pt_tf_neorv32.runs/impl_1/*.bit
+ls -lt $HOME/vivado_projects/<project>/pt_tf_neorv32.runs/impl_1/*.bit
 ```
 Newest `.bit` by timestamp = last build. Name matches top module.
 

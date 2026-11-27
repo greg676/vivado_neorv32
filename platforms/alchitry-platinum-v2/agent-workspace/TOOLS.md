@@ -3,7 +3,7 @@
 ## Build & Flash (the proven method)
 ```bash
 # Build firmware
-cd ~/Desktop/designs/ptv2/vivado_neorv32/firmware/debug_console
+cd platforms/alchitry-platinum-v2/firmware/debug_console
 make clean && make exe
 
 # Flash via J-Link (1 MHz, wait 3-5s between attempts)
@@ -50,18 +50,18 @@ data = ser.read(2000)
 - OpenOCD 0.12.0 + J-Link for debug (`/tmp/openocd_neorv32_jlink.cfg`)
 
 ## Critic
-- **Script:** `~/.openclaw-godbot/workspace/projects/critic/scripts/call_codecbot_critic.py`
+- **Script:** `~/.openclaw-<orchestrator>/workspace/projects/critic/scripts/call_codecbot_critic.py`
 - **Usage:** `--message-file /tmp/critic_plan.md` (the message file contains your Proposed Plan + Context + Source Data)
 - **`--sync`:** Only when SOT source files changed. Overuse creates duplicate knowledge collections.
 
 ## Key Paths
 | What | Where |
 |------|-------|
-| Firmware | `~/Desktop/designs/ptv2/vivado_neorv32/firmware/debug_console/` |
-| Top-level RTL | `~/Desktop/designs/ptv2/vivado_neorv32/rtl/neorv_basic_plus_top.v` |
-| Pin constraints | `~/Desktop/designs/ptv2/vivado_neorv32/constraints/ptv2_basic_plus.xdc` |
-| Block design | `~/Desktop/designs/ptv2/vivado_neorv32/bd/neorv_basic_plus.bd` |
-| Vivado project | `~/vivado_projects/alchirty_ptv2/pt_tf_neorv32/` |
+| Firmware | `platforms/alchitry-platinum-v2/firmware/debug_console/` |
+| Top-level RTL | `platforms/alchitry-platinum-v2/rtl/neorv_basic_plus_top.v` |
+| Pin constraints | `platforms/alchitry-platinum-v2/constraints/ptv2_basic_plus.xdc` |
+| Block design | `platforms/alchitry-platinum-v2/bd/neorv_basic_plus.bd` |
+| Vivado project | `$HOME/vivado_projects/<project>/` |
 | Last bitstream | `pt_tf_neorv32.runs/impl_1/` (find by timestamp: `ls -lt *.bit`) |
-| Knowledge drops | `~/Desktop/designs/ptv2/docs/` |
+| Knowledge drops | `<workspace>/docs/` |
 | HARDWARE-DEBUG-RULES | `docs/HARDWARE-DEBUG-RULES.md` (in this workspace) |

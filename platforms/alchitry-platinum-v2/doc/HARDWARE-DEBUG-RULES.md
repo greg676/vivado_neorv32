@@ -10,7 +10,7 @@
 ### Firmware Loading (THE ONLY METHOD THAT WORKS)
 ```bash
 # 1. Build
-cd /home/greg-jack/Desktop/designs/ptv2/vivado_neorv32/firmware/debug_console
+cd platforms/alchitry-platinum-v2/firmware/debug_console
 make clean && make exe
 
 # 2. Flash via J-Link — CRITICAL: 1 MHz JTAG, wait 3-5s between attempts
@@ -22,7 +22,7 @@ JLinkExe -device RISC-V -if JTAG -speed 1000 -autoconnect 1 \
 # flash.jlink contents (MUST be exactly this):
 #   r
 #   halt
-#   loadbin /home/greg-jack/Desktop/designs/ptv2/vivado_neorv32/firmware/debug_console/elf.bin 0x00000000
+#   loadbin elf.bin 0x00000000
 #   wreg pc 0x00000000
 #   go
 #   exit

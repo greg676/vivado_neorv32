@@ -24,13 +24,13 @@ BEGIN_QUOTED_NOTES
 - Toolchain issues: Xilinx ARM GCC lacks C++ headers → installed `gcc-arm-none-eabi` (system package)
 - CMake cache repeatedly poisoned by Xilinx toolchain in PATH → forced `CMAKE_C_COMPILER` to system GCC
 - TinyUSB `TUD_CDC_DESCRIPTOR` macro issue → used raw descriptor bytes initially, then fixed with proper `tusb_config.h`
-- Final .uf2: `/home/greg-jack/Desktop/designs/ptv2/vivado_neorv32/firmware/rp2040_uart_passthrough/passthrough.uf2`
+- Final .uf2: `platforms/alchitry-platinum-v2/firmware/rp2040_uart_passthrough/passthrough.uf2`
 
 ### RP2040 Passthrough Status
 - First .uf2 build: didn't enumerate as USB device (descriptor bugs)
 - Second build: fixed descriptors, uses `tusb_init()`, proper `TUD_CONFIG_DESCRIPTOR`/`TUD_CDC_DESCRIPTOR` macros
 - Enumerates as "CodecBot UART Passthrough" on `/dev/ttyACM0`
-- User had trouble drag-dropping .uf2 → used `cp` command directly to `/media/greg-jack/RPI-RP2/`
+- User had trouble drag-dropping .uf2 → used `cp` command directly to `/media/<user>/RPI-RP2/`
 - MicroPython fallback: downloaded `RPI_PICO-v1.25.0.uf2` to desktop
 
 ### Key RP2040 Files on Desktop
@@ -61,13 +61,13 @@ BEGIN_QUOTED_NOTES
 - Toolchain issues: Xilinx ARM GCC lacks C++ headers → installed `gcc-arm-none-eabi` (system package)
 - CMake cache repeatedly poisoned by Xilinx toolchain in PATH → forced `CMAKE_C_COMPILER` to system GCC
 - TinyUSB `TUD_CDC_DESCRIPTOR` macro issue → used raw descriptor bytes initially, then fixed with proper `tusb_config.h`
-- Final .uf2: `/home/greg-jack/Desktop/designs/ptv2/vivado_neorv32/firmware/rp2040_uart_passthrough/passthrough.uf2`
+- Final .uf2: `platforms/alchitry-platinum-v2/firmware/rp2040_uart_passthrough/passthrough.uf2`
 
 ### RP2040 Passthrough Status
 - First .uf2 build: didn't enumerate as USB device (descriptor bugs)
 - Second build: fixed descriptors, uses `tusb_init()`, proper `TUD_CONFIG_DESCRIPTOR`/`TUD_CDC_DESCRIPTOR` macros
 - Enumerates as "CodecBot UART Passthrough" on `/dev/ttyACM0`
-- User had trouble drag-dropping .uf2 → used `cp` command directly to `/media/greg-jack/RPI-RP2/`
+- User had trouble drag-dropping .uf2 → used `cp` command directly to `/media/<user>/RPI-RP2/`
 - MicroPython fallback: downloaded `RPI_PICO-v1.25.0.uf2` to desktop
 
 ### Key RP2040 Files on Desktop
@@ -98,13 +98,13 @@ BEGIN_QUOTED_NOTES
 - Toolchain issues: Xilinx ARM GCC lacks C++ headers → installed `gcc-arm-none-eabi` (system package)
 - CMake cache repeatedly poisoned by Xilinx toolchain in PATH → forced `CMAKE_C_COMPILER` to system GCC
 - TinyUSB `TUD_CDC_DESCRIPTOR` macro issue → used raw descriptor bytes initially, then fixed with proper `tusb_config.h`
-- Final .uf2: `/home/greg-jack/Desktop/designs/ptv2/vivado_neorv32/firmware/rp2040_uart_passthrough/passthrough.uf2`
+- Final .uf2: `platforms/alchitry-platinum-v2/firmware/rp2040_uart_passthrough/passthrough.uf2`
 
 ### RP2040 Passthrough Status
 - First .uf2 build: didn't enumerate as USB device (descriptor bugs)
 - Second build: fixed descriptors, uses `tusb_init()`, proper `TUD_CONFIG_DESCRIPTOR`/`TUD_CDC_DESCRIPTOR` macros
 - Enumerates as "CodecBot UART Passthrough" on `/dev/ttyACM0`
-- User had trouble drag-dropping .uf2 → used `cp` command directly to `/media/greg-jack/RPI-RP2/`
+- User had trouble drag-dropping .uf2 → used `cp` command directly to `/media/<user>/RPI-RP2/`
 - MicroPython fallback: downloaded `RPI_PICO-v1.25.0.uf2` to desktop
 
 ### Key RP2040 Files on Desktop
@@ -135,13 +135,13 @@ BEGIN_QUOTED_NOTES
 - Toolchain issues: Xilinx ARM GCC lacks C++ headers → installed `gcc-arm-none-eabi` (system package)
 - CMake cache repeatedly poisoned by Xilinx toolchain in PATH → forced `CMAKE_C_COMPILER` to system GCC
 - TinyUSB `TUD_CDC_DESCRIPTOR` macro issue → used raw descriptor bytes initially, then fixed with proper `tusb_config.h`
-- Final .uf2: `/home/greg-jack/Desktop/designs/ptv2/vivado_neorv32/firmware/rp2040_uart_passthrough/passthrough.uf2`
+- Final .uf2: `platforms/alchitry-platinum-v2/firmware/rp2040_uart_passthrough/passthrough.uf2`
 
 ### RP2040 Passthrough Status
 - First .uf2 build: didn't enumerate as USB device (descriptor bugs)
 - Second build: fixed descriptors, uses `tusb_init()`, proper `TUD_CONFIG_DESCRIPTOR`/`TUD_CDC_DESCRIPTOR` macros
 - Enumerates as "CodecBot UART Passthrough" on `/dev/ttyACM0`
-- User had trouble drag-dropping .uf2 → used `cp` command directly to `/media/greg-jack/RPI-RP2/`
+- User had trouble drag-dropping .uf2 → used `cp` command directly to `/media/<user>/RPI-RP2/`
 - MicroPython fallback: downloaded `RPI_PICO-v1.25.0.uf2` to desktop
 
 ### Key RP2040 Files on Desktop
@@ -172,13 +172,13 @@ BEGIN_QUOTED_NOTES
 - Toolchain issues: Xilinx ARM GCC lacks C++ headers → installed `gcc-arm-none-eabi` (system package)
 - CMake cache repeatedly poisoned by Xilinx toolchain in PATH → forced `CMAKE_C_COMPILER` to system GCC
 - TinyUSB `TUD_CDC_DESCRIPTOR` macro issue → used raw descriptor bytes initially, then fixed with proper `tusb_config.h`
-- Final .uf2: `/home/greg-jack/Desktop/designs/ptv2/vivado_neorv32/firmware/rp2040_uart_passthrough/passthrough.uf2`
+- Final .uf2: `platforms/alchitry-platinum-v2/firmware/rp2040_uart_passthrough/passthrough.uf2`
 
 ### RP2040 Passthrough Status
 - First .uf2 build: didn't enumerate as USB device (descriptor bugs)
 - Second build: fixed descriptors, uses `tusb_init()`, proper `TUD_CONFIG_DESCRIPTOR`/`TUD_CDC_DESCRIPTOR` macros
 - Enumerates as "CodecBot UART Passthrough" on `/dev/ttyACM0`
-- User had trouble drag-dropping .uf2 → used `cp` command directly to `/media/greg-jack/RPI-RP2/`
+- User had trouble drag-dropping .uf2 → used `cp` command directly to `/media/<user>/RPI-RP2/`
 - MicroPython fallback: downloaded `RPI_PICO-v1.25.0.uf2` to desktop
 
 ### Key RP2040 Files on Desktop

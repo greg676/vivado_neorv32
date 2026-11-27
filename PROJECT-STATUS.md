@@ -50,7 +50,7 @@ The three-pillar system is structurally complete. Hardware platform works. Appli
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| Open WebUI | ✅ Running | Port 8080, data on /mnt/data-1tb |
+| Open WebUI | ✅ Running | Port 8080, data on /mnt/<data-disk> |
 | Ollama R7 | ✅ Running | qwen3.6:27b-r7, rnj-1-r5:latest, etc. |
 | Ollama R5 | ✅ Running | RX 6600, embeddings + fallback |
 | mcpo Bridge | ✅ Running | Port 8200, all 4 servers connected |
@@ -134,6 +134,6 @@ The three-pillar system is structurally complete. Hardware platform works. Appli
 
 ## Contact
 
-- **Development:** R7 (gj-007, 10.0.0.50)
-- **Mesh:** claw-studio.tail708254.ts.net
+- **Development:** R7 (<dev-host>, <lan-r7>)
+- **Mesh:** <tailnet-host>.ts.net
 - **GitHub:** https://github.com/greg676/vivado_neorv32

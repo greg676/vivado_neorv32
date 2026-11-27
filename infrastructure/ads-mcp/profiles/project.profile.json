@@ -3,24 +3,24 @@
   "project": {
     "name": "alchitry-platinum-v2",
     "version": "0.1.0",
-    "session_dir": "/mnt/data-1tb/ai-design-studio/debug-sessions/",
-    "workspace_dir": "/mnt/data-1tb/ai-design-studio/workspace/"
+    "session_dir": "/mnt/<data-disk>/ai-design-studio/debug-sessions/",
+    "workspace_dir": "/mnt/<data-disk>/ai-design-studio/workspace/"
   },
   "filesystem": {
     "read_roots": [
       "~/projects/",
-      "/mnt/data-1tb/ai-design-studio/",
-      "~/.openclaw-godbot/workspace/",
-      "~/.openclaw-codecbot/workspaces/codecbot/",
-      "~/Desktop/designs/",
+      "/mnt/<data-disk>/ai-design-studio/",
+      "~/.openclaw-<orchestrator>/workspace/",
+      "~/.openclaw-<agent>/workspaces/codecbot/",
+      "<workspace>/designs/",
       "~/Downloads/"
     ],
     "write_roots": [
       "~/projects/alchitry-platinum-v2/",
-      "/mnt/data-1tb/ai-design-studio/workspace/",
-      "/mnt/data-1tb/ai-design-studio/debug-sessions/"
+      "/mnt/<data-disk>/ai-design-studio/workspace/",
+      "/mnt/<data-disk>/ai-design-studio/debug-sessions/"
     ],
-    "trash_dir": "/mnt/data-1tb/ai-design-studio/.trash"
+    "trash_dir": "/mnt/<data-disk>/ai-design-studio/.trash"
   },
   "github": {
     "username": "yourname",
@@ -62,7 +62,7 @@
     "flash_spi_profile": "profiles/flash-mx25l6406e-known-good.json"
   },
   "browser": {
-    "screenshot_dir": "/mnt/data-1tb/ai-design-studio/browser-captures/",
+    "screenshot_dir": "/mnt/<data-disk>/ai-design-studio/browser-captures/",
     "url_allowlist": [
       "http://127.0.0.1:*",
       "http://localhost:*",
@@ -74,5 +74,5 @@
       "docs.xilinx.com"
     ]
   },
-  "audit_log": "/mnt/data-1tb/ai-design-studio/audit/audit.jsonl"
+  "audit_log": "/mnt/<data-disk>/ai-design-studio/audit/audit.jsonl"
 }

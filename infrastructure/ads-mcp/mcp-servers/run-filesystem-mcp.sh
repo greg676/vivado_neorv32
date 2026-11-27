@@ -1,5 +1,5 @@
 #!/bin/bash
-export ADS_PROFILE=/mnt/data-1tb/ai-design-studio/project.profile.json
+export ADS_PROFILE=/mnt/<data-disk>/ai-design-studio/project.profile.json
 
 # Extract allowed directories from profile
 ALLOWED_DIRS=$(python3 -c "
@@ -13,4 +13,5 @@ roots = [r for r in roots if os.path.isdir(r)]
 print(' '.join(roots))
 ")
 
-exec /home/greg-jack/.nvm/versions/node/v22.22.1/bin/mcp-server-filesystem $ALLOWED_DIRS
+: "${NVM_DIR:=$HOME/.nvm}"
+exec "${NVM_DIR}/versions/node/current/bin/mcp-server-filesystem" $ALLOWED_DIRS

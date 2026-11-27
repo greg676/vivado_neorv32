@@ -64,7 +64,7 @@ assistant: The debug console is compiled and ready. Here's the summary:
 **To load it:**
 
 ```bash
-cd /home/greg-jack/Desktop/designs/ptv2/vivado_neorv32/firmware/debug_console
+cd platforms/alchitry-platinum-v2/firmware/debug_console
 JLinkExe -device RISC-V -if JTAG -speed 4000 -autoconnect 1 \
   -JTAGConf "-1,-1" -CommanderScript flash.jlink
 ```

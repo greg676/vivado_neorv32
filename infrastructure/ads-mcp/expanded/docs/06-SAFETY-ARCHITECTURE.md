@@ -40,7 +40,7 @@ All four MCP servers share a unified safety tier system:
 
 ## 6.2 Audit Log
 
-**Location:** `/mnt/data-1tb/ai-design-studio/audit/audit.jsonl`
+**Location:** `/mnt/<data-disk>/ai-design-studio/audit/audit.jsonl`
 
 **Format (one JSON object per line):**
 
