@@ -1,0 +1,9 @@
+vivado_project_ft601/
+*.jou
+*.log
+*.str
+.Xil/
+__pycache__/
+*.pyc
+bitstreams/*.bit
+bitstreams/*.ltx
