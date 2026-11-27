@@ -46,8 +46,9 @@ python3 host/ft601-loopback/ft601_loopback.py --backend d3xx --bytes 16384 --chu
 
 ## LA capture (dual 4 KiB BRAM → PR #18 PHY → PulseView `.sr`)
 
-Dedicated top. Two 4 KiB BRAM banks sit in front of the PHY so the sampler
-never stalls on TXE. Host IN only. Writes a sigrok v2 `.sr` (keep zips out of
+Dedicated top. Two FIFO36E1 FWFT banks (8 KiB) sit in front of the PHY so
+the sampler never stalls on TXE and `tx_valid` stays solid through each
+4 KiB WR burst. Host IN only. Writes a sigrok v2 `.sr` (keep zips out of
 Project `docs/`). Target is 32-bit @ 100 MHz ≈ 400 MB/s.
 
 ```bash
