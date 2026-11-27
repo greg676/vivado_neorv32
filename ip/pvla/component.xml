@@ -698,53 +698,35 @@
         <spirit:userFileType>xdc</spirit:userFileType>
         <spirit:userFileType>USED_IN_synthesis</spirit:userFileType>
         <spirit:userFileType>USED_IN_implementation</spirit:userFileType>
-        <spirit:vendorExtensions>
-          <xilinx:fileInfo xilinx:usedIn="synthesis implementation"/>
-        </spirit:vendorExtensions>
       </spirit:file>
       <spirit:file>
         <spirit:name>xdc/ftplus_ft601_pt_v2.xdc</spirit:name>
         <spirit:userFileType>xdc</spirit:userFileType>
         <spirit:userFileType>USED_IN_synthesis</spirit:userFileType>
         <spirit:userFileType>USED_IN_implementation</spirit:userFileType>
-        <spirit:vendorExtensions>
-          <xilinx:fileInfo xilinx:usedIn="synthesis implementation"/>
-        </spirit:vendorExtensions>
       </spirit:file>
       <spirit:file>
         <spirit:name>xdc/ftplus_ft601_au_v2.xdc</spirit:name>
         <spirit:userFileType>xdc</spirit:userFileType>
         <spirit:userFileType>USED_IN_synthesis</spirit:userFileType>
         <spirit:userFileType>USED_IN_implementation</spirit:userFileType>
-        <spirit:vendorExtensions>
-          <xilinx:fileInfo xilinx:usedIn="synthesis implementation"/>
-        </spirit:vendorExtensions>
       </spirit:file>
       <spirit:file>
         <spirit:name>xdc/ftplus_ft601_timing.xdc</spirit:name>
         <spirit:userFileType>xdc</spirit:userFileType>
         <spirit:userFileType>USED_IN_synthesis</spirit:userFileType>
         <spirit:userFileType>USED_IN_implementation</spirit:userFileType>
-        <spirit:vendorExtensions>
-          <xilinx:fileInfo xilinx:usedIn="synthesis implementation"/>
-        </spirit:vendorExtensions>
       </spirit:file>
       <spirit:file>
         <spirit:name>xdc/ftplus_ft601_impl.xdc</spirit:name>
         <spirit:userFileType>xdc</spirit:userFileType>
         <spirit:userFileType>USED_IN_implementation</spirit:userFileType>
-        <spirit:vendorExtensions>
-          <xilinx:fileInfo xilinx:usedIn="implementation"/>
-        </spirit:vendorExtensions>
       </spirit:file>
       <spirit:file>
         <spirit:name>xdc/br_bank_a_8ch.xdc</spirit:name>
         <spirit:userFileType>xdc</spirit:userFileType>
         <spirit:userFileType>USED_IN_synthesis</spirit:userFileType>
         <spirit:userFileType>USED_IN_implementation</spirit:userFileType>
-        <spirit:vendorExtensions>
-          <xilinx:fileInfo xilinx:usedIn="synthesis implementation"/>
-        </spirit:vendorExtensions>
       </spirit:file>
     </spirit:fileSet>
     <spirit:fileSet>
