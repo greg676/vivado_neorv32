@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Greg Jackson
+# SPDX-License-Identifier: MIT
 # RP2040 Zero USB-UART Passthrough
 # GP0 = UART0 TX → FPGA RX (pin F19)
 # GP1 = UART0 RX ← FPGA TX (pin B15)

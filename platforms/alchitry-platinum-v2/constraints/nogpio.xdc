@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Greg Jackson
+# SPDX-License-Identifier: MIT
 set_property PACKAGE_PIN N15 [get_ports clk_in1_0]
 set_property IOSTANDARD LVCMOS33 [get_ports clk_in1_0]
 set_property IOSTANDARD LVCMOS33 [get_ports resetn_0]

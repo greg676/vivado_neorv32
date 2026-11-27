@@ -1,0 +1,7 @@
+pattern=uart
+notes=8N1 1000000 baud on RX (D0); payload b'Hello UART\n'
+rate_hz=200000000
+nsamples=28400
+trig_pos=3200
+probes=RX,D1,D2,D3,D4,D5,D6,D7
+raw_import=PulseView File>Import>Raw binary; 8 channels; 1 byte/sample; little-endian; 200000000 Hz; bit0=probe1=RX

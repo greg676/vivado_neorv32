@@ -84,3 +84,13 @@ Au stack (SRAM, no CPU, no QSPI):
 Every Au and Pt LA load in this work is **RAM**: `openFPGALoader --write-sram` or Vivado `program_ram`. No `write_cfgmem`, no `.mcs`, no flash. Reload SRAM for each test.
 
 LA / FT601 / PVLA tops **do not instantiate NeoRV32**. Pt DDR3 is a fabric AXI master + MIG, no CPU in the BD.
+
+## License
+
+Original work in this repository — including **PVLA**, FT601 PHY, LA capture, host tools, and Alchitry platform glue — is **MIT**. See [`LICENSE`](LICENSE). Source files carry `SPDX-License-Identifier: MIT`.
+
+**NeoRV32** remains **BSD-3-Clause**. It is not rewritten here. The CPU is used as a Vivado catalog IP; firmware includes its public C headers. The upstream license is copied verbatim at [`third_party/neorv32/LICENSE`](third_party/neorv32/LICENSE) ([stnolting/neorv32](https://github.com/stnolting/neorv32)).
+
+Vivado-generated wrapper netlists keep their AMD/Xilinx copyright comments. RISC-V GNU toolchain binaries under `platforms/alchitry-platinum-v2/firmware/debug_console/tools/` keep their own licenses (not MIT).
+
+Do not commit secrets (API keys, `.env`, SSH keys). See `.gitignore`.
