@@ -30,6 +30,9 @@ PIPE_IN = 0x82
 EP_SESSION = 0x01
 FIFO_CH0 = 0
 MAX_XFER = 16384
+# D3XX IN stream (FT_SetStreamPipe + large FT_ReadPipeEx). C host overlaps URBs.
+D3XX_STREAM_CHUNK = 256 * 1024
+D3XX_STREAM_CHUNK_MAX = 1024 * 1024
 FT_OK = 0
 FT_OPEN_BY_INDEX = 0x00000010
 FT_PIPE_DIR_IN = 0
@@ -389,14 +392,23 @@ class Ft601D3xx:
         lib.FT_SetPipeTimeout.restype = c_ulong
         lib.FT_SetTransferParams.argtypes = [c_void_p, c_ulong]
         lib.FT_SetTransferParams.restype = c_ulong
+        lib.FT_SetStreamPipe.argtypes = [c_void_p, c_int, c_int, c_uint8, c_ulong]
+        lib.FT_SetStreamPipe.restype = c_ulong
+        lib.FT_ClearStreamPipe.argtypes = [c_void_p, c_int, c_int, c_uint8]
+        lib.FT_ClearStreamPipe.restype = c_ulong
         self.lib = lib
         self.handle = c_void_p()
         self.timeout_ms = timeout_ms
+        self.read_max = MAX_XFER
+        self.stream_on = False
         if not skip_reset:
             _bus_reset()
         conf = _FT_TRANSFER_CONF()
         conf.wStructSize = ctypes.sizeof(_FT_TRANSFER_CONF)
         conf.pipe[FT_PIPE_DIR_IN].fNonThreadSafeTransfer = 1
+        conf.pipe[FT_PIPE_DIR_IN].bURBCount = 8
+        conf.pipe[FT_PIPE_DIR_IN].wURBBufferCount = 16
+        conf.pipe[FT_PIPE_DIR_IN].dwURBBufferSize = D3XX_STREAM_CHUNK_MAX
         conf.pipe[FT_PIPE_DIR_OUT].fNonThreadSafeTransfer = 1
         for fifo in range(4):
             lib.FT_SetTransferParams(ctypes.byref(conf), fifo)
@@ -406,8 +418,23 @@ class Ft601D3xx:
         lib.FT_SetPipeTimeout(self.handle, PIPE_OUT, timeout_ms)
         lib.FT_SetPipeTimeout(self.handle, PIPE_IN, timeout_ms)
 
+    def _enable_in_stream(self, chunk: int) -> None:
+        if self.stream_on:
+            return
+        st = self.lib.FT_SetStreamPipe(self.handle, 0, 1, 0, chunk)
+        if st != FT_OK:
+            print(f"FT601 D3XX  : FT_SetStreamPipe {st}; 16 KiB one-shot IN")
+            return
+        self.lib.FT_SetPipeTimeout(self.handle, PIPE_IN, 0)
+        self.read_max = chunk
+        self.stream_on = True
+        print(f"FT601 D3XX  : stream IN {chunk} bytes (one-shot Python; C overlaps URBs)")
+
     def close(self) -> None:
         if self.handle:
+            if self.stream_on:
+                self.lib.FT_ClearStreamPipe(self.handle, 0, 1, 0)
+                self.stream_on = False
             self.lib.FT_Close(self.handle)
             self.handle = c_void_p()
 
@@ -428,13 +455,16 @@ class Ft601D3xx:
         return done
 
     def read(self, nbytes: int) -> bytes:
+        if nbytes >= D3XX_STREAM_CHUNK:
+            self._enable_in_stream(D3XX_STREAM_CHUNK)
         out = bytearray()
+        timeout = 0 if self.stream_on else self.timeout_ms
         while len(out) < nbytes:
-            want = min(MAX_XFER, nbytes - len(out))
+            want = min(self.read_max, nbytes - len(out))
             rx = ctypes.create_string_buffer(want)
             xferred = c_ulong(0)
             st = self.lib.FT_ReadPipeEx(
-                self.handle, FIFO_CH0, rx, want, byref(xferred), self.timeout_ms
+                self.handle, FIFO_CH0, rx, want, byref(xferred), timeout
             )
             if xferred.value:
                 out += rx.raw[: int(xferred.value)]
