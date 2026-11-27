@@ -18,7 +18,7 @@ BEGIN_QUOTED_NOTES
 # 2026-06-10 — Milestone: NeoRV32 Bootloader Live + JTAG Connected + hello_uart
 
 ## Bitstream
-- **Project:** `~/vivado_projects/alchirty_ptv2/pt_tf_neorv32/`
+- **Project:** `$HOME/vivado_projects/<project>/`
 - **Block design:** `neorv_basic` (minimal — no DDR, no DMA, no codec)
 - **Bitstream:** `impl_1/neorv_basic_top.bit` (built 09:26 PDT)
 - **Top-level:** `neorv_basic_top.v`
@@ -26,7 +26,7 @@ BEGIN_QUOTED_NOTES
 ## Hardware Platform
 - **Board:** Alchitry Pt V2 (XC7A100T-2FGG484I) + Ft+ + Br breakout
 - **RP2040 Zero:** USB-UART passthrough bridge
-- **J-Link:** EDU Mini V2, S/N 802001213, FW May 2026
+- **J-Link:** EDU Mini V2, S/N <jlink-serial>, FW May 2026
 
 ## System Clock
 - **Board oscillator:** 100 MHz (W19)

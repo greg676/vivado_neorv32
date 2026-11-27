@@ -22,8 +22,8 @@
 | 9 | Hardware MCP language? | **Python 3.12** (pylink-square, pyserial, smbus2) | pylink is Python-only. pyserial is Python-native. One language, simple stack. |
 | 10 | Debug channel? | **RTT primary, UART secondary** | RTT is non-intrusive, 100x faster, no UART pins needed. |
 | 11 | GitHub formality? | **Full** — issues, PRs, CI, public-facing quality | This is going to be seen. Professional from day one. |
-| 12 | KB sync? | **Single collection** on /mnt/data-1tb/.../knowledge/, no cross-OWUI sync needed | One OWUI = one KB. No sync problem. |
-| 13 | Data location? | **All on /mnt/data-1tb** | 800GB free. OS drive has 107GB — don't fill it. |
+| 12 | KB sync? | **Single collection** on /mnt/<data-disk>/.../knowledge/, no cross-OWUI sync needed | One OWUI = one KB. No sync problem. |
+| 13 | Data location? | **All on /mnt/<data-disk>** | 800GB free. OS drive has 107GB — don't fill it. |
 | 14 | Project coupling? | **None.** Any project plugs in via project.profile.json. | ADS+MCP is infrastructure, not a product. |
 | 15 | Safety model? | **Unified 4-tier system** across all servers | Tier 0 (read) → Tier 1 (local write) → Tier 2 (controlled mutation) → Tier 3 (dangerous) |
 | 16 | Audit? | **Append-only JSONL**, one line per tool call | Queryable, immutable, rotated monthly. |

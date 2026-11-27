@@ -44,12 +44,12 @@ The agent sends:
 
 | File | Path |
 |------|------|
-| PROJECT-STATUS-CANONICAL.md | `~/.openclaw-godbot/workspace/projects/codec-ft601/PROJECT-STATUS-CANONICAL.md` |
-| WORKLOG.md | `~/.openclaw-codecbot/workspaces/codecbot/WORKLOG.md` |
-| HARDWARE-DEBUG-RULES.md | `~/.openclaw-codecbot/workspaces/codecbot/docs/HARDWARE-DEBUG-RULES.md` |
-| KNOWLEDGE-BASE.md | `~/.openclaw-godbot/workspace/projects/codec-ft601/KNOWLEDGE-BASE.md` |
-| PLANNER-PROMPT.md | `~/.openclaw-godbot/workspace/projects/codec-ft601/PLANNER-PROMPT.md` |
-| PLANNER-PROMPT-COMPACT.md | `~/.openclaw-godbot/workspace/projects/codec-ft601/PLANNER-PROMPT-COMPACT.md` |
+| PROJECT-STATUS-CANONICAL.md | `~/.openclaw-<orchestrator>/workspace/projects/codec-ft601/PROJECT-STATUS-CANONICAL.md` |
+| WORKLOG.md | `~/.openclaw-<agent>/workspaces/codecbot/WORKLOG.md` |
+| HARDWARE-DEBUG-RULES.md | `~/.openclaw-<agent>/workspaces/codecbot/docs/HARDWARE-DEBUG-RULES.md` |
+| KNOWLEDGE-BASE.md | `~/.openclaw-<orchestrator>/workspace/projects/codec-ft601/KNOWLEDGE-BASE.md` |
+| PLANNER-PROMPT.md | `~/.openclaw-<orchestrator>/workspace/projects/codec-ft601/PLANNER-PROMPT.md` |
+| PLANNER-PROMPT-COMPACT.md | `~/.openclaw-<orchestrator>/workspace/projects/codec-ft601/PLANNER-PROMPT-COMPACT.md` |
 
 ## Rules
 

@@ -23,7 +23,7 @@
 //--------------------------------------------------------------------------------
 //Tool Version: Vivado v.2025.2 (lin64) Build 6299465 Fri Nov 14 12:34:56 MST 2025
 //Date        : Thu Jun 18 04:23:28 2026
-//Host        : gj-007 running 64-bit Ubuntu 24.04.4 LTS
+//Host        : <dev-host> running 64-bit Ubuntu 24.04.4 LTS
 //Command     : generate_target neorv_basic_plus_wrapper.bd
 //Design      : neorv_basic_plus_wrapper
 //Purpose     : IP block netlist

@@ -55,3 +55,14 @@ firmware/**/*.d
 firmware/**/*.bin
 firmware/**/*.hex
 firmware/**/build/
+
+# Secrets / local credentials — never commit
+.env
+.env.*
+ads.env
+webui.json
+auth-profiles.json
+*.pem
+id_rsa
+id_ed25519
+*.key

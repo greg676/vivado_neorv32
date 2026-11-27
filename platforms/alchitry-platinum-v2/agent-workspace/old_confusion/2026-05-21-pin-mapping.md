@@ -1,8 +1,8 @@
 # Alchitry PTV2 Pin Mapping — Complete
 
 ## Source Files
-- **`.acf`**: `/home/greg-jack/Desktop/ft_plus_v2.acf` (Br connector names)
-- **`.xdc`**: `/home/greg-jack/Desktop/alchitry.xdc` (FPGA package pins — GROUND TRUTH)
+- **`.acf`**: `<workspace>/ft_plus_v2.acf` (Br connector names)
+- **`.xdc`**: `<workspace>/alchitry.xdc` (FPGA package pins — GROUND TRUTH)
 
 ## Alchitry Pt V2 Fixed-Function Pins
 

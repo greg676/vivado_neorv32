@@ -19,8 +19,8 @@
 | 0.2 | Regenerate stale OWUI admin JWT token | API calls return 200 | ☐ |
 | 0.3 | Document exact docker run command | Command saved with all mounts + env | ☐ |
 | 0.4 | Confirm Tailscale URL access | `:8445` loads OWUI | ☐ |
-| 0.5 | Confirm Ollama models on /mnt/data-1tb | `ollama list` shows models | ☐ |
-| 0.6 | Confirm OWUI data on /mnt/data-1tb | DB, uploads, vector_db present | ☐ |
+| 0.5 | Confirm Ollama models on /mnt/<data-disk> | `ollama list` shows models | ☐ |
+| 0.6 | Confirm OWUI data on /mnt/<data-disk> | DB, uploads, vector_db present | ☐ |
 | 0.7 | Tag all R5 Ollama models with -r5 | `ollama list` on R5 shows *-r5 | ☐ |
 | 0.8 | (Optional) Tag R7 Ollama models with -r7 | `ollama list` on R7 shows *-r7 | ☐ |
 
@@ -40,7 +40,7 @@
 
 | # | Task | Verification | Status |
 |---|------|-------------|--------|
-| 1.1 | Create `/mnt/data-1tb/ai-design-studio/` tree | Directory structure exists | ☐ |
+| 1.1 | Create `/mnt/<data-disk>/ai-design-studio/` tree | Directory structure exists | ☐ |
 | 1.2 | Create `project.profile.json` | Valid JSON, all placeholders filled | ☐ |
 | 1.3 | Install + wrap filesystem MCP server | `fs.list` works from CLI | ☐ |
 | 1.4 | Install + wrap GitHub MCP server | `github.issue.list` works from CLI | ☐ |
@@ -52,7 +52,7 @@
 | 1.10 | Verify: list GitHub issues | Orchestrator returns issue list | ☐ |
 
 ### Deliverables
-- Full `/mnt/data-1tb/ai-design-studio/` tree
+- Full `/mnt/<data-disk>/ai-design-studio/` tree
 - `project.profile.json` with real values
 - mcpo running as systemd service
 - ai-design-orchestrator model in OWUI

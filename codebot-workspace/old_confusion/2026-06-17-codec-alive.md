@@ -108,7 +108,7 @@ assistant: ---
 
 ## Summary — CS42448 I²C Validated and Documented
 
-**Documentation:** `~/.openclaw-codecbot/workspaces/codecbot/docs/CS42448-I2C-VALIDATED.md`
+**Documentation:** `~/.openclaw-<agent>/workspaces/codecbot/docs/CS42448-I2C-VALIDATED.md`
 
 ### What works:
 - ✅ **debug_console firmware loaded** — provides UART interface to I²C bus
@@ -145,7 +145,7 @@ MCLK is the codec's master clock. On the Br breakout, pin D16 is the MCLK. The F
 ```bash
 # 1. Flash debug_console (if not already loaded)
 JLinkExe -device RV32 -if JTAG -speed 4000 -autoconnect 1 -NoGui 1 \
-  -CommandFile ~/Desktop/designs/ptv2/vivado_neorv32/firmware/debug_console/flash.jlink -jtagconf -1,-1
+  -CommandFile platforms/alchitry-platinum-v2/firmware/debug_console/flash.jlink -jtagconf -1,-1
 
 # 2. Open UART and run init
 python3 -c "

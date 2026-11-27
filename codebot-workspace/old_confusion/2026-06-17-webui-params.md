@@ -210,10 +210,10 @@ docker run -d \
   --restart always \
   -p 8080:8080 \
   -v open-webui:/app/backend/data \
-  -v /home/greg-jack/projects/codec-ft601:/app/backend/data/firmware:ro \
-  -v /home/greg-jack/Desktop:/app/backend/data/desktop:ro \
+  -v $HOME/projects/codec-ft601:/app/backend/data/firmware:ro \
+  -v <workspace>:/app/backend/data/desktop:ro \
   -e OLLAMA_BASE_URL=http://host.docker.internal:11434 \
-  -e WEBUI_SECRET_KEY=4aa697f17140c6aaffce58fbe72e5da75392e31daa9d93c30523a8603d02be05 \
+  -e WEBUI_SECRET_KEY=<redacted-webui-secret-key> \
   -e WHISPER_MODEL=base \
   -e RAG_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2 \
   -e AUXILIARY_EMBEDDING_MODEL=TaylorAI/bge-micro-v2 \
@@ -222,8 +222,8 @@ docker run -d \
 ```
 
 The two new lines:
-- `-v /home/greg-jack/projects/codec-ft601:/app/backend/data/firmware:ro` — `:ro` = **read-only**, safest
-- `-v /home/greg-jack/Desktop:/app/backend/data/desktop:ro`
+- `-v $HOME/projects/codec-ft601:/app/backend/data/firmware:ro` — `:ro` = **read-only**, safest
+- `-v <workspace>:/app/backend/data/desktop:ro`
 
 **B) Skip the bind mount, use a "Tools" function instead** (more flexible, no docker changes)
 
@@ -305,7 +305,7 @@ For first bring-up, **tie WP# and HOLD# to 3V3** through 10kΩ pull-ups. Don't l
 
 ## What I found on disk
 
-- **Pin map (canonical):** `~/Desktop/alchitry.xdc` — has the FT601, TDM (mclk/sclk/lrclk/din/dout), I²C (scl/sda), JTAG, **3 GPIOs (gpio[0..2])**, 8 LEDs, clk/rst. **No SPI bus is in the current XDC.**
+- **Pin map (canonical):** `<workspace>/alchitry.xdc` — has the FT601, TDM (mclk/sclk/lrclk/din/dout), I²C (scl/sda), JTAG, **3 GPIOs (gpio[0..2])**, 8 LEDs, clk/rst. **No SPI bus is in the current XDC.**
 - **Vivado projects:** `~/vivado_projects/Neorv32_demos/` has 7 variants — `NeoRV32_PtV2_fb`, `NeoRV32_AuV1`, `AuV2`, `_wddr`, etc. I don't know which one is the currently-working "debug system."
 - **neoRV32 source:** `~/vivado_projects/neorv32-main/` (full GitHub clone, includes `sw/lib/include/neorv32_spi.h` and `neorv32.h`)
 - **Firmware tree:** `~/projects/blackbox-audio/firmware/` has `twi_explorer` and `blink`. `neorv32_spi.c.o` is in the build dir, meaning SPI driver is already pulled from the neorv32-main sw/ tree.
@@ -380,7 +380,7 @@ Each task has an acceptance criterion and a flag `[NEEDS: ...]` where I'm blocke
 
 ### Phase 5 — Documentation
 
-- **T5.1** Add a "W25Q64 Flash" section to `~/Desktop/codec_knbase_0.md` (the existing knowledge base file).
+- **T5.1** Add a "W25Q64 Flash" section to `<workspace>/codec_knbase_0.md` (the existing knowledge base file).
 - **T5.2** Document the pin assignments, driver API, and known gotchas.
 
 ## What I need back from you
@@ -392,7 +392,7 @@ Q1: Which Vivado project is the working debug system? (path to .xpr)
 Q2: Is the W25Q64 on the Br breakout, or somewhere else?
 Q3: Boot flash or storage only?
 Q4: Built-in neorv32_spi or external AXI Quad SPI IP?
-Q5: Is there a newer pin map than ~/Desktop/alchitry.xdc that includes the display/touch/SD SPI bus?
+Q5: Is there a newer pin map than <workspace>/alchitry.xdc that includes the display/touch/SD SPI bus?
 ```
 
-Once you answer those, I'll collapse the `[NEEDS: ...]` flags, fill in the real pin numbers, and produce the final task list for the planner pipe. The earlier (May) knowledge base session is in `~/Desktop/codec_knbase_0.md` — I'll read that again to make sure I'm not duplicating or contradicting prior decisions.
+Once you answer those, I'll collapse the `[NEEDS: ...]` flags, fill in the real pin numbers, and produce the final task list for the planner pipe. The earlier (May) knowledge base session is in `<workspace>/codec_knbase_0.md` — I'll read that again to make sure I'm not duplicating or contradicting prior decisions.

@@ -5,5 +5,5 @@ USER_FLAGS += -ggdb -gdwarf-3
 USER_FLAGS += -Wl,--defsym,__neorv32_rom_size=128k
 USER_FLAGS += -Wl,--defsym,__neorv32_ram_size=128k
 USER_FLAGS += -Wl,--defsym,__neorv32_heap_size=4k
-NEORV32_HOME = /home/greg-jack/vivado_projects/neorv32-main
+NEORV32_HOME ?= $(HOME)/neorv32
 include $(NEORV32_HOME)/sw/common/common.mk

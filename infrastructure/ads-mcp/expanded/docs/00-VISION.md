@@ -44,7 +44,7 @@ Safety comes not from trusting the model, but from architecture that makes unsaf
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │ R7 OWUI — THE SOLE COCKPIT (port 8080)                       │
-│ https://claw-studio.tail708254.ts.net:8445                   │
+│ https://<tailnet-host>.ts.net:8445                   │
 │                                                              │
 │ ROLE MODELS (system prompt + tools + permissions):            │
 │                                                              │

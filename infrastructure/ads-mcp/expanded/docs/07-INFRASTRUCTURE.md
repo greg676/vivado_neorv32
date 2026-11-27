@@ -39,11 +39,11 @@ After=network.target
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/mcpo \
-  --config /mnt/data-1tb/ai-design-studio/mcp-servers/mcpo-config.json \
+  --config /mnt/<data-disk>/ai-design-studio/mcp-servers/mcpo-config.json \
   --port 8200
 Restart=on-failure
 RestartSec=5
-Environment=ADS_PROFILE=/mnt/data-1tb/ai-design-studio/project.profile.json
+Environment=ADS_PROFILE=/mnt/<data-disk>/ai-design-studio/project.profile.json
 
 [Install]
 WantedBy=default.target
@@ -63,16 +63,16 @@ systemctl --user status mcpo
 {
   "mcpServers": {
     "r7-filesystem": {
-      "command": "/mnt/data-1tb/ai-design-studio/mcp-servers/run-filesystem-mcp.sh"
+      "command": "/mnt/<data-disk>/ai-design-studio/mcp-servers/run-filesystem-mcp.sh"
     },
     "github-project": {
-      "command": "/mnt/data-1tb/ai-design-studio/mcp-servers/run-github-mcp.sh"
+      "command": "/mnt/<data-disk>/ai-design-studio/mcp-servers/run-github-mcp.sh"
     },
     "browser-puppeteer": {
-      "command": "/mnt/data-1tb/ai-design-studio/mcp-servers/run-browser-mcp.sh"
+      "command": "/mnt/<data-disk>/ai-design-studio/mcp-servers/run-browser-mcp.sh"
     },
     "hardware-debug": {
-      "command": "/mnt/data-1tb/ai-design-studio/mcp-servers/run-hardware-mcp.sh"
+      "command": "/mnt/<data-disk>/ai-design-studio/mcp-servers/run-hardware-mcp.sh"
     }
   }
 }
@@ -85,7 +85,7 @@ systemctl --user status mcpo
 Every conversation with the orchestrator produces a self-contained directory that feeds back into the KB:
 
 ```
-/mnt/data-1tb/ai-design-studio/debug-sessions/
+/mnt/<data-disk>/ai-design-studio/debug-sessions/
   2026-06-22-1035-codec-output-dead/
     ├── session.json              ← metadata: model, session ID, duration
     ├── conversation.md           ← human-readable transcript
@@ -112,7 +112,7 @@ Every conversation with the orchestrator produces a self-contained directory tha
 ## 7.5 Data Layout
 
 ```
-/mnt/data-1tb/
+/mnt/<data-disk>/
 ├── ollama/models/                    ← Ollama blobs
 ├── open-webui/                       ← OWUI persistent data
 │   ├── webui.db

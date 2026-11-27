@@ -1,7 +1,7 @@
 # NeoRV32 Framework Deep Dive
 
 ## Location
-`/home/greg-jack/vivado_projects/neorv32-main/` — full source tree, no git connection (zip extraction)
+`$HOME/neorv32/` — full source tree, no git connection (zip extraction)
 
 ## Structure
 

@@ -12,5 +12,5 @@ USER_FLAGS += -L/usr/lib/gcc/riscv64-unknown-elf/13.2.0/rv32i/ilp32
 APP_SRC += $(wildcard ./*.c)
 APP_INC += -I/usr/lib/picolibc/riscv64-unknown-elf/include
 
-NEORV32_HOME ?= /home/greg-jack/vivado_projects/Neorv32_demos/NeoRV32_AuV1/neorv32
+NEORV32_HOME ?= $(HOME)/neorv32
 include $(NEORV32_HOME)/sw/common/common.mk
