@@ -28,6 +28,10 @@ Reload SRAM for **each** test. Do **not** reuse the echo bitstream.
 vivado -mode batch -source tcl/rebuild_ft601_loopback.tcl -tclargs
 # or:  set ft601_mode TX_ONLY  in a wrapper
 openFPGALoader --fpga-part xc7a35tftg256 --write-sram bitstreams/ft601_tx_only_top_v2.bit
+# Throughput: overlapped D3XX IN (256 KiB..1 MiB, several URBs). Not 16 KiB Python.
+make -C host/ft601-loopback d3xx D3XX_DIR=$HOME/ft601-host/d3xx/unpack/linux-arm-v8
+./host/ft601-loopback/ft601_loopback_d3xx --tx-only --bytes 16777216 \
+    --chunk-bytes 262144 --nflight 4
 python3 host/ft601-loopback/ft601_loopback.py --backend d3xx --bytes 16384 --chunk-bytes 16384 --tx-only
 
 # RX-only (FPGA RD while RXF). Then host OUT known pattern.
@@ -52,8 +56,9 @@ vivado -mode batch -source tcl/rebuild_la_capture.tcl
 openFPGALoader --fpga-part xc7a35tftg256 --write-sram bitstreams/la_capture_top_v2.bit
 python3 host/ft601-capture/ft601_capture.py --backend d3xx --bytes 16384 --chunk-bytes 4096 \
     --sr /tmp/au-la-counter.sr
-# Throughput (Jetson D3XX IN). Report MiB/s and words_ok.
-python3 host/ft601-capture/ft601_capture.py --backend d3xx --bytes 16777216 --chunk-bytes 16384
+# Throughput (Jetson overlapped D3XX IN). Report MiB/s vs 381.47 theoretical.
+./host/ft601-loopback/ft601_loopback_d3xx --packed-counter --bytes 16777216 \
+    --chunk-bytes 262144 --nflight 4
 ```
 
 ## PVLA catalog IP (Block Design)

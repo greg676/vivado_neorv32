@@ -1,9 +1,10 @@
 # FT601 loopback host tool.
 #   make            - pattern self-test (no USB)
 #   make hw         - hardware binary against libusb-1.0 (preferred)
-#   make d3xx       - hardware binary against FTDI D3XX (optional)
+#   make d3xx       - hardware binary against FTDI D3XX (overlapped IN stream)
 #
 # D3XX_DIR must contain ftd3xx.h and libftd3xx.so (unpack the Linux SDK).
+# Jetson: D3XX_DIR=$HOME/ft601-host/d3xx/unpack/linux-arm-v8
 
 CC       ?= gcc
 # Default `cc` on this bench is not gcc.
@@ -38,7 +39,7 @@ ft601_loopback_d3xx: ft601_loopback.c $(USB_DIR)/ft601_usb.c $(USB_DIR)/ft601_us
 	  exit 1; }
 	$(CC) $(CFLAGS) -DFT601_USE_D3XX -I$(USB_DIR) -I$(D3XX_DIR) $(USB_CFLAGS) -o $@ \
 		ft601_loopback.c $(USB_DIR)/ft601_usb.c \
-		-L$(D3XX_DIR) -lftd3xx -lpthread -ldl $(USB_LIBS)
+		-L$(D3XX_DIR) -Wl,-rpath,$(D3XX_DIR) -lftd3xx -lpthread -ldl $(USB_LIBS)
 
 selftest: ft601_loopback_selftest
 	./ft601_loopback_selftest --self-test

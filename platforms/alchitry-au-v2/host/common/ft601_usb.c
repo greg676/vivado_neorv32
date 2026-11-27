@@ -10,7 +10,8 @@
  * Jetson: that path wrote 4+1024+4096+8192 = 13312 bytes (rc=0).
  *
  * Optional: -DFT601_USE_D3XX. On Linux call FT_SetTransferParams then
- * FT_Create, and FT_WritePipeEx/FT_ReadPipeEx with fifo id 0 (not 0x02).
+ * FT_Create, FT_SetStreamPipe, and overlapped FT_ReadPipeAsync (fifo id 0).
+ * 16 KiB one-shot IN is the old Jetson path; stream is 256 KiB..1 MiB.
  */
 
 #include "ft601_usb.h"
@@ -63,10 +64,31 @@ static void set_err(char *err, size_t errlen, const char *msg)
 #define FT_PIPE_DIR_OUT 1
 #endif
 
+#ifndef FT_FAILED
+#define FT_FAILED(st) ((st) != FT_OK)
+#endif
+
+#define D3XX_MAX_WRITE 16384u
+#define D3XX_DEFAULT_CHUNK FT601_STREAM_CHUNK_MIN
+#define D3XX_DEFAULT_FLIGHT 4u
+
 struct ft601_dev {
     FT_HANDLE handle;
     unsigned timeout_ms;
+    unsigned chunk_bytes;
+    unsigned nflight;
+    int stream_on;
+    const char *in_path;
+    OVERLAPPED ov[FT601_STREAM_FLIGHT_MAX];
+    unsigned char *urb[FT601_STREAM_FLIGHT_MAX][2];
+    int urb_sel[FT601_STREAM_FLIGHT_MAX];
+    int ov_inited[FT601_STREAM_FLIGHT_MAX];
 };
+
+static unsigned urb_buffer_size(void)
+{
+    return FT601_STREAM_CHUNK_MAX;
+}
 
 static void d3xx_set_transfer_params(void)
 {
@@ -75,15 +97,71 @@ static void d3xx_set_transfer_params(void)
 
     memset(&conf, 0, sizeof(conf));
     conf.wStructSize = sizeof(conf);
+    /* Single-thread IN; D3XX keeps several URBs queued (FTDI streamer). */
     conf.pipe[FT_PIPE_DIR_IN].fNonThreadSafeTransfer = TRUE;
+    conf.pipe[FT_PIPE_DIR_IN].bURBCount = 8;
+    conf.pipe[FT_PIPE_DIR_IN].wURBBufferCount = 16;
+    conf.pipe[FT_PIPE_DIR_IN].dwURBBufferSize = urb_buffer_size();
     conf.pipe[FT_PIPE_DIR_OUT].fNonThreadSafeTransfer = TRUE;
     for (i = 0; i < 4; i++)
         FT_SetTransferParams(&conf, i);
 }
 
+static void d3xx_release_urbs(ft601_dev *d)
+{
+    unsigned i;
+
+    if (!d || !d->handle)
+        return;
+    for (i = 0; i < FT601_STREAM_FLIGHT_MAX; i++) {
+        if (d->ov_inited[i]) {
+            FT_ReleaseOverlapped(d->handle, &d->ov[i]);
+            d->ov_inited[i] = 0;
+        }
+        free(d->urb[i][0]);
+        free(d->urb[i][1]);
+        d->urb[i][0] = NULL;
+        d->urb[i][1] = NULL;
+        d->urb_sel[i] = 0;
+    }
+}
+
+static int d3xx_prep_urbs(ft601_dev *d, unsigned nflight, unsigned chunk,
+                          char *err, size_t errlen)
+{
+    unsigned i;
+
+    d3xx_release_urbs(d);
+    for (i = 0; i < nflight; i++) {
+        d->urb[i][0] = (unsigned char *)malloc(chunk);
+        d->urb[i][1] = (unsigned char *)malloc(chunk);
+        if (!d->urb[i][0] || !d->urb[i][1]) {
+            set_err(err, errlen, "out of memory (IN URB buffers)");
+            d3xx_release_urbs(d);
+            return -1;
+        }
+        d->urb_sel[i] = 0;
+        memset(&d->ov[i], 0, sizeof(d->ov[i]));
+        if (FT_InitializeOverlapped(d->handle, &d->ov[i]) != FT_OK) {
+            snprintf(err, errlen, "FT_InitializeOverlapped %u failed", i);
+            d3xx_release_urbs(d);
+            return -1;
+        }
+        d->ov_inited[i] = 1;
+    }
+    return 0;
+}
+
 const char *ft601_backend_name(void)
 {
     return "d3xx";
+}
+
+const char *ft601_in_path(const ft601_dev *d)
+{
+    if (!d || !d->in_path)
+        return "d3xx-oneshot";
+    return d->in_path;
 }
 
 ft601_dev *ft601_open(int index, unsigned timeout_ms, char *err, size_t errlen)
@@ -97,8 +175,11 @@ ft601_dev *ft601_open(int index, unsigned timeout_ms, char *err, size_t errlen)
         return NULL;
     }
     d->timeout_ms = timeout_ms ? timeout_ms : 5000;
+    d->chunk_bytes = D3XX_DEFAULT_CHUNK;
+    d->nflight = D3XX_DEFAULT_FLIGHT;
+    d->in_path = "d3xx-oneshot";
     ft601_bus_reset();
-    /* Linux D3XX: params before FT_Create, matching FTDI rw.c / streamer. */
+    /* Linux D3XX: params before FT_Create, matching FTDI streamer. */
     d3xx_set_transfer_params();
     st = FT_Create((PVOID)(uintptr_t)index, FT_OPEN_BY_INDEX, &d->handle);
     if (st != FT_OK || d->handle == NULL) {
@@ -116,9 +197,66 @@ void ft601_close(ft601_dev *d)
 {
     if (!d)
         return;
-    if (d->handle)
+    if (d->handle) {
+        if (d->stream_on) {
+            FT_AbortPipe(d->handle, PIPE_IN);
+            FT_ClearStreamPipe(d->handle, FALSE, TRUE, 0);
+            FT_ClearStreamPipe(d->handle, FALSE, FALSE, PIPE_IN);
+            d->stream_on = 0;
+        }
+        d3xx_release_urbs(d);
         FT_Close(d->handle);
+    }
     free(d);
+}
+
+int ft601_configure_in_stream(ft601_dev *d, unsigned chunk_bytes,
+                              unsigned nflight, char *err, size_t errlen)
+{
+    FT_STATUS st;
+
+    if (!d || !d->handle) {
+        set_err(err, errlen, "device not open");
+        return -1;
+    }
+    if (chunk_bytes < FT601_STREAM_CHUNK_MIN ||
+        chunk_bytes > FT601_STREAM_CHUNK_MAX ||
+        (chunk_bytes % 4u) != 0) {
+        snprintf(err, errlen,
+                 "IN stream chunk must be 256 KiB..1 MiB and a multiple of 4 (got %u)",
+                 chunk_bytes);
+        return -1;
+    }
+    if (nflight < 2u || nflight > FT601_STREAM_FLIGHT_MAX) {
+        snprintf(err, errlen, "nflight must be 2..%u (got %u)",
+                 FT601_STREAM_FLIGHT_MAX, nflight);
+        return -1;
+    }
+
+    if (d->stream_on) {
+        FT_ClearStreamPipe(d->handle, FALSE, TRUE, 0);
+        d->stream_on = 0;
+    }
+
+    /* Infinite pipe timeout like FTDI streamer.cpp; overlapped waits on the event. */
+    FT_SetPipeTimeout(d->handle, PIPE_IN, 0);
+    st = FT_SetStreamPipe(d->handle, FALSE, TRUE, 0, chunk_bytes);
+    if (FT_FAILED(st)) {
+        snprintf(err, errlen, "FT_SetStreamPipe %lu", (unsigned long)st);
+        FT_SetPipeTimeout(d->handle, PIPE_IN, d->timeout_ms);
+        return -1;
+    }
+    d->stream_on = 1;
+    d->chunk_bytes = chunk_bytes;
+    d->nflight = nflight;
+    d->in_path = "d3xx-stream";
+
+    if (d3xx_prep_urbs(d, nflight, chunk_bytes, err, errlen) != 0) {
+        /* Stream is still useful with blocking FT_ReadPipeEx. */
+        return 0;
+    }
+    d->in_path = "d3xx-overlapped";
+    return 0;
 }
 
 int ft601_write(ft601_dev *d, const void *buf, size_t n, size_t *xferred)
@@ -130,7 +268,7 @@ int ft601_write(ft601_dev *d, const void *buf, size_t n, size_t *xferred)
         *xferred = 0;
     while (done < n) {
         ULONG got = 0;
-        ULONG want = (ULONG)((n - done) > FT601_MAX_XFER ? FT601_MAX_XFER
+        ULONG want = (ULONG)((n - done) > D3XX_MAX_WRITE ? D3XX_MAX_WRITE
                                                          : (n - done));
         FT_STATUS st = FT_WritePipeEx(d->handle, FIFO_CH0, (PUCHAR)(p + done),
                                       want, &got, d->timeout_ms);
@@ -146,29 +284,160 @@ int ft601_write(ft601_dev *d, const void *buf, size_t n, size_t *xferred)
     return 0;
 }
 
-int ft601_read(ft601_dev *d, void *buf, size_t n, size_t *xferred)
+static int d3xx_read_oneshot(ft601_dev *d, unsigned char *p, size_t n,
+                             size_t *xferred)
 {
-    unsigned char *p = (unsigned char *)buf;
     size_t done = 0;
+    unsigned cap = d->stream_on ? d->chunk_bytes : D3XX_MAX_WRITE;
+    unsigned char *scratch = NULL;
 
-    if (xferred)
-        *xferred = 0;
+    if (!p) {
+        scratch = (unsigned char *)malloc(cap);
+        if (!scratch) {
+            if (xferred)
+                *xferred = 0;
+            return -1;
+        }
+    }
+
     while (done < n) {
         ULONG got = 0;
-        ULONG want = (ULONG)((n - done) > FT601_MAX_XFER ? FT601_MAX_XFER
-                                                         : (n - done));
-        FT_STATUS st = FT_ReadPipeEx(d->handle, FIFO_CH0, p + done, want, &got,
-                                     d->timeout_ms);
+        ULONG want = (ULONG)((n - done) > cap ? cap : (n - done));
+        unsigned char *dst = p ? (p + done) : scratch;
+        FT_STATUS st = FT_ReadPipeEx(d->handle, FIFO_CH0, dst, want, &got,
+                                     d->stream_on ? 0u : d->timeout_ms);
         done += (size_t)got;
         if (st != FT_OK || got != want) {
             if (xferred)
                 *xferred = done;
+            free(scratch);
             return -1;
         }
     }
     if (xferred)
         *xferred = done;
+    free(scratch);
     return 0;
+}
+
+static int d3xx_start_async(ft601_dev *d, unsigned slot, ULONG len)
+{
+    ULONG dummy = 0;
+    unsigned sel = (unsigned)d->urb_sel[slot] & 1u;
+    FT_STATUS st = FT_ReadPipeAsync(d->handle, FIFO_CH0, d->urb[slot][sel],
+                                    len, &dummy, &d->ov[slot]);
+    return (st == FT_OK || st == FT_IO_PENDING) ? 0 : -1;
+}
+
+static int d3xx_read_overlapped(ft601_dev *d, unsigned char *p, size_t n,
+                                size_t *xferred)
+{
+    unsigned nflight = d->nflight;
+    unsigned chunk = d->chunk_bytes;
+    size_t submitted = 0;
+    size_t completed = 0;
+    unsigned slot = 0;
+    unsigned i;
+    int active[FT601_STREAM_FLIGHT_MAX];
+
+    if (!d->ov_inited[0] || nflight < 2u || chunk == 0)
+        return d3xx_read_oneshot(d, p, n, xferred);
+
+    memset(active, 0, sizeof(active));
+    for (i = 0; i < nflight && submitted + chunk <= n; i++) {
+        if (d3xx_start_async(d, i, chunk) != 0) {
+            d->in_path = "d3xx-stream";
+            FT_AbortPipe(d->handle, PIPE_IN);
+            return d3xx_read_oneshot(d, p, n, xferred);
+        }
+        active[i] = 1;
+        submitted += chunk;
+    }
+    if (submitted == 0)
+        return d3xx_read_oneshot(d, p, n, xferred);
+
+    while (completed < submitted) {
+        ULONG got = 0;
+        FT_STATUS st;
+        unsigned spins = 0;
+
+        while (!active[slot] && spins < nflight) {
+            slot++;
+            if (slot >= nflight)
+                slot = 0;
+            spins++;
+        }
+        if (!active[slot]) {
+            if (xferred)
+                *xferred = completed;
+            FT_AbortPipe(d->handle, PIPE_IN);
+            return -1;
+        }
+
+        st = FT_GetOverlappedResult(d->handle, &d->ov[slot], &got, TRUE);
+        active[slot] = 0;
+        if (st != FT_OK || got != chunk) {
+            if (got && p)
+                memcpy(p + completed, d->urb[slot][d->urb_sel[slot] & 1], got);
+            completed += got;
+            if (xferred)
+                *xferred = completed;
+            FT_AbortPipe(d->handle, PIPE_IN);
+            return -1;
+        }
+        {
+            unsigned done_sel = (unsigned)d->urb_sel[slot] & 1u;
+            /* Re-queue on the other buffer before memcpy so USB stays full. */
+            if (submitted + chunk <= n) {
+                d->urb_sel[slot] = (int)(done_sel ^ 1u);
+                if (d3xx_start_async(d, slot, chunk) != 0) {
+                    if (p)
+                        memcpy(p + completed, d->urb[slot][done_sel], got);
+                    completed += got;
+                    if (xferred)
+                        *xferred = completed;
+                    FT_AbortPipe(d->handle, PIPE_IN);
+                    return -1;
+                }
+                active[slot] = 1;
+                submitted += chunk;
+            }
+            if (p)
+                memcpy(p + completed, d->urb[slot][done_sel], got);
+            completed += got;
+        }
+        slot++;
+        if (slot >= nflight)
+            slot = 0;
+    }
+
+    if (completed < n) {
+        size_t tail = 0;
+        /* Remainder is smaller than FT_SetStreamPipe; drop the session. */
+        FT_ClearStreamPipe(d->handle, FALSE, TRUE, 0);
+        d->stream_on = 0;
+        FT_SetPipeTimeout(d->handle, PIPE_IN, d->timeout_ms);
+        if (d3xx_read_oneshot(d, p + completed, n - completed, &tail) != 0) {
+            if (xferred)
+                *xferred = completed + tail;
+            return -1;
+        }
+        completed += tail;
+    }
+    if (xferred)
+        *xferred = completed;
+    return 0;
+}
+
+int ft601_read(ft601_dev *d, void *buf, size_t n, size_t *xferred)
+{
+    unsigned char *p = (unsigned char *)buf;
+
+    if (xferred)
+        *xferred = 0;
+    if (d->stream_on)
+        return d3xx_read_overlapped(d, p, n, xferred);
+    return d3xx_read_oneshot(d, p, n, xferred);
 }
 
 #else /* libusb */
@@ -187,6 +456,23 @@ struct ft601_dev {
 const char *ft601_backend_name(void)
 {
     return "libusb";
+}
+
+const char *ft601_in_path(const ft601_dev *d)
+{
+    (void)d;
+    return "libusb-oneshot";
+}
+
+int ft601_configure_in_stream(ft601_dev *d, unsigned chunk_bytes,
+                              unsigned nflight, char *err, size_t errlen)
+{
+    (void)d;
+    (void)chunk_bytes;
+    (void)nflight;
+    set_err(err, errlen,
+            "IN stream needs D3XX (make d3xx); libusb stays 16 KiB session URBs");
+    return -1;
 }
 
 static int session_list(ft601_dev *d, unsigned char pipe, uint32_t length)

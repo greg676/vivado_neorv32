@@ -16,6 +16,8 @@ python3 ft601_capture.py --self-test
 # SRAM-load bitstreams/la_capture_top_v2.bit first (never --write-flash):
 python3 ft601_capture.py --backend d3xx --bytes 16384 --chunk-bytes 4096 \
     --sr /tmp/au-la-counter.sr --dump /tmp/au-la-counter.raw
-# 16 MiB D3XX IN throughput (prints MiB/s and words_ok):
-python3 ft601_capture.py --backend d3xx --bytes 16777216 --chunk-bytes 16384
+# 16 MiB D3XX IN throughput: use the C overlapped streamer, not 16 KiB Python.
+# (from host/ft601-loopback, after `make d3xx`)
+../ft601-loopback/ft601_loopback_d3xx --packed-counter --bytes 16777216 \
+    --chunk-bytes 262144 --nflight 4
 ```
