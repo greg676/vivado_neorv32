@@ -64,6 +64,8 @@ def main() -> int:
     phy = (AU / "rtl/ft601/ft601_sync_fifo.v").read_text()
     if "ALWAYS_DRIVE" not in phy or "TX_BURST_WORDS" not in phy:
         err("Au PHY must remain 4 KiB Lucid WR")
+    if "parameter TX_BURST_WORDS = 1024" not in phy:
+        err("Au PHY must stay 4 KiB (TX_BURST_WORDS=1024)")
 
     buf = (PLAT / "rtl/la/la_ddr3_axi_buf.v").read_text()
     if "32'h2000_0000" not in buf and "32'h20000000" not in buf:
@@ -91,8 +93,31 @@ def main() -> int:
     xdc = (PLAT / "constraints/pvla_mig7_top.xdc").read_text()
     if "PACKAGE_PIN W19" not in xdc:
         err("top XDC must place board clk on W19")
-    if re.search(r"PACKAGE_PIN.*DDR3", xdc, re.I):
+    if "PACKAGE_PIN N15" not in xdc:
+        err("top XDC must place rst_n on N15")
+    for pin in ("P19", "P20", "T21", "R19", "V22", "U21", "T20", "W20"):
+        if f"PACKAGE_PIN {pin}" not in xdc:
+            err(f"top XDC missing LED pin {pin}")
+    if re.search(r"PACKAGE_PIN\s+\S+\s+\[get_ports[^\]]*DDR3", xdc, re.I):
         err("top XDC must not pin DDR3 (MIG owns those)")
+
+    top = (PLAT / "rtl/la/pvla_mig7_top.v").read_text()
+    top_code = "\n".join(
+        ln.split("//", 1)[0] for ln in top.splitlines() if not ln.lstrip().startswith("//")
+    )
+    if re.search(r"neorv32_vivado_ip|\bneorv32\b", top_code, re.I):
+        err("pvla_mig7_top must not instantiate NeoRV32")
+    if "C_SIM_MEM" not in top:
+        err("pvla_mig7_top must offer C_SIM_MEM (axi_sram_slave vs BD wrapper)")
+    if "axi_sram_slave" not in top or "pvla_mig7_bd_wrapper" not in top:
+        err("pvla_mig7_top must switch axi_sram_slave / pvla_mig7_bd_wrapper")
+
+    au_example = (AU / "tcl" / "pvla_bd_example.tcl").read_text()
+    au_ex_code = "\n".join(
+        ln for ln in au_example.splitlines() if not ln.lstrip().startswith("#")
+    )
+    if re.search(r"create_bd_cell\s+-type\s+ip\s+.*mig", au_ex_code, re.I):
+        err("Au pvla_bd_example.tcl must not instantiate MIG")
 
     # Catalog IP stays BRAM-only.
     pvla = (IP / "hdl/pvla.v").read_text()

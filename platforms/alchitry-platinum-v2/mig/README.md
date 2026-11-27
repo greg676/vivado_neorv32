@@ -13,15 +13,17 @@ PVLA does **not** vendor a new MIG pin file. Reuse the proven controller from `b
 
 DDR3 `PACKAGE_PIN`s live **inside** the MIG IP (same as a DIMM pin file). Do not add them to a user XDC.
 
-## Get `mig_pt_v2.prj`
+## Get `mig_b.prj`
 
 On a machine that already built `neorv_basic_plus`:
 
 ```bash
 # from that Vivado project's generated MIG
 cp <proj>.gen/sources_1/bd/neorv_basic_plus/ip/*mig_7series*/mig_b.prj \
-   platforms/alchitry-platinum-v2/mig/mig_pt_v2.prj
+   platforms/alchitry-platinum-v2/mig/mig_b.prj
 ```
+
+`tcl/pvla_mig7_bd.tcl` also accepts `mig/mig_pt_v2.prj` as a fallback name.
 
 Then:
 

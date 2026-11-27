@@ -12,10 +12,23 @@ module tb_pvla_mig7_stream;
     wire        overflow_sticky, fifo_empty, tx_active, calib_ok;
     wire [31:0] ddr_used;
     integer     wr_count = 0;
+    integer     data_n   = 0;
+    integer     errors   = 0;
     integer     i;
+    integer     k;
+    reg [31:0]  exp;
 
     assign ft_data = 32'bz;
     assign ft_be   = 4'bz;
+
+    function automatic [31:0] pack4;
+        input integer n;
+        reg [7:0] a;
+        begin
+            a = n % 256;
+            pack4 = {a + 8'd3, a + 8'd2, a + 8'd1, a};
+        end
+    endfunction
 
     wire [31:0]  awaddr, araddr;
     wire [7:0]   awlen, arlen;
@@ -114,18 +127,32 @@ module tb_pvla_mig7_stream;
     always #5 ft_clk = ~ft_clk;
 
     always @(posedge ft_clk)
-        if (!rst && ft_wr === 1'b0)
+        if (!rst && ft_wr === 1'b0) begin
             wr_count = wr_count + 1;
+            if (data_n < 256) begin
+                k   = data_n * 4;
+                exp = pack4(k);
+                if (ft_data !== exp) begin
+                    if (errors < 16)
+                        $display("FAIL stream n=%0d got=0x%08x exp=0x%08x",
+                                 data_n, ft_data, exp);
+                    errors = errors + 1;
+                end
+                data_n = data_n + 1;
+            end
+        end
 
     initial begin
         repeat (8) @(posedge ft_clk);
         rst <= 1'b0;
         for (i = 0; i < 8000; i = i + 1)
             @(posedge ft_clk);
-        $display("tb_pvla_mig7_stream wr_count=%0d used=%0d ovf=%0d",
-                 wr_count, ddr_used, overflow_sticky);
+        $display("tb_pvla_mig7_stream wr_count=%0d data_n=%0d used=%0d ovf=%0d",
+                 wr_count, data_n, ddr_used, overflow_sticky);
         if (wr_count < 1024)
             $display("FAIL tb_pvla_mig7_stream expected a 4 KiB WR burst");
+        else if (errors != 0)
+            $display("FAIL tb_pvla_mig7_stream packed-counter errors=%0d", errors);
         else
             $display("PASS tb_pvla_mig7_stream");
         $finish;

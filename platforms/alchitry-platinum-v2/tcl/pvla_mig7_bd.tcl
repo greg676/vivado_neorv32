@@ -21,7 +21,17 @@ set script_dir  [file dirname [file normalize [info script]]]
 set plat_dir    [file dirname $script_dir]
 set project_dir [file join $plat_dir vivado_project_pvla_mig7]
 set part        xc7a100tfgg484-2
-set mig_prj     [file join $plat_dir mig mig_pt_v2.prj]
+set mig_prj ""
+foreach cand {mig_b.prj mig_pt_v2.prj} {
+  set p [file join $plat_dir mig $cand]
+  if {[file exists $p]} {
+    set mig_prj $p
+    break
+  }
+}
+if {$mig_prj eq ""} {
+  set mig_prj [file join $plat_dir mig mig_b.prj]
+}
 
 puts "PVLA MIG7 BD (Pt V2, no CPU)"
 puts "  part    : $part"
@@ -61,6 +71,9 @@ make_bd_pins_external        -name clk    [get_bd_pins clk_wiz_0/clk_in1]
 make_bd_pins_external        -name resetn [get_bd_pins clk_wiz_0/resetn]
 make_bd_intf_pins_external   -name DDR3_0 [get_bd_intf_pins mig_7series_0/DDR3]
 make_bd_intf_pins_external   -name S00_AXI [get_bd_intf_pins smartconnect_0/S00_AXI]
+set_property CONFIG.DATA_WIDTH {128} [get_bd_intf_ports S00_AXI]
+set_property CONFIG.ID_WIDTH   {0}   [get_bd_intf_ports S00_AXI]
+set_property CONFIG.PROTOCOL   {AXI4} [get_bd_intf_ports S00_AXI]
 
 connect_bd_net [get_bd_pins clk_wiz_0/clk_out1] [get_bd_pins mig_7series_0/sys_clk_i]
 connect_bd_net [get_bd_pins clk_wiz_0/clk_out2] [get_bd_pins mig_7series_0/clk_ref_i]

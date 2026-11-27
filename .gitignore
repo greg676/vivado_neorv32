@@ -18,6 +18,7 @@ vivado_pid*.str
 # PVLA packager / example BD work dirs
 ip/pvla/work/
 **/vivado_project_pvla_bd/
+**/vivado_project_pvla_mig7*/
 
 # Vivado IP temp
 *.srcs/*/bd/*/hdl/
