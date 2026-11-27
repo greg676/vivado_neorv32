@@ -699,7 +699,7 @@
         <spirit:userFileType>USED_IN_synthesis</spirit:userFileType>
         <spirit:userFileType>USED_IN_implementation</spirit:userFileType>
         <spirit:vendorExtensions>
-          <xilinx:fileInfo xilinx:scopedToRef="pvla" xilinx:enablementDependency="$C_PHY == 0 &amp;&amp; $C_BOARD == 0"/>
+          <xilinx:fileInfo xilinx:usedIn="synthesis implementation"/>
         </spirit:vendorExtensions>
       </spirit:file>
       <spirit:file>
@@ -708,7 +708,7 @@
         <spirit:userFileType>USED_IN_synthesis</spirit:userFileType>
         <spirit:userFileType>USED_IN_implementation</spirit:userFileType>
         <spirit:vendorExtensions>
-          <xilinx:fileInfo xilinx:scopedToRef="pvla" xilinx:enablementDependency="$C_PHY == 0 &amp;&amp; $C_BOARD == 1"/>
+          <xilinx:fileInfo xilinx:usedIn="synthesis implementation"/>
         </spirit:vendorExtensions>
       </spirit:file>
       <spirit:file>
@@ -717,7 +717,7 @@
         <spirit:userFileType>USED_IN_synthesis</spirit:userFileType>
         <spirit:userFileType>USED_IN_implementation</spirit:userFileType>
         <spirit:vendorExtensions>
-          <xilinx:fileInfo xilinx:scopedToRef="pvla" xilinx:enablementDependency="$C_PHY == 0 &amp;&amp; $C_BOARD == 2"/>
+          <xilinx:fileInfo xilinx:usedIn="synthesis implementation"/>
         </spirit:vendorExtensions>
       </spirit:file>
       <spirit:file>
@@ -726,7 +726,7 @@
         <spirit:userFileType>USED_IN_synthesis</spirit:userFileType>
         <spirit:userFileType>USED_IN_implementation</spirit:userFileType>
         <spirit:vendorExtensions>
-          <xilinx:fileInfo xilinx:scopedToRef="pvla" xilinx:enablementDependency="$C_PHY == 0"/>
+          <xilinx:fileInfo xilinx:usedIn="synthesis implementation"/>
         </spirit:vendorExtensions>
       </spirit:file>
       <spirit:file>
@@ -734,7 +734,7 @@
         <spirit:userFileType>xdc</spirit:userFileType>
         <spirit:userFileType>USED_IN_implementation</spirit:userFileType>
         <spirit:vendorExtensions>
-          <xilinx:fileInfo xilinx:scopedToRef="pvla" xilinx:enablementDependency="$C_PHY == 0"/>
+          <xilinx:fileInfo xilinx:usedIn="implementation"/>
         </spirit:vendorExtensions>
       </spirit:file>
       <spirit:file>
@@ -743,7 +743,7 @@
         <spirit:userFileType>USED_IN_synthesis</spirit:userFileType>
         <spirit:userFileType>USED_IN_implementation</spirit:userFileType>
         <spirit:vendorExtensions>
-          <xilinx:fileInfo xilinx:scopedToRef="pvla" xilinx:enablementDependency="$C_INCLUDE_BR_XDC != 0"/>
+          <xilinx:fileInfo xilinx:usedIn="synthesis implementation"/>
         </spirit:vendorExtensions>
       </spirit:file>
     </spirit:fileSet>
