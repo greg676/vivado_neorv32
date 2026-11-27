@@ -16,7 +16,8 @@ module tb_la_packer;
     wire        v100;
 
     la_pattern #(.SAMPLE_MHZ(100)) u_pat100 (
-        .clk(clk), .rst(rst), .source(2'd0), .s0(p100_s0), .s1(p100_s1)
+        .clk(clk), .rst(rst), .enable(1'b1), .soft_rst(1'b0),
+        .source(2'd0), .s0(p100_s0), .s1(p100_s1)
     );
     la_packer #(.SAMPLE_MHZ(100)) u_pack100 (
         .clk(clk), .rst(rst), .enable(1'b1),
@@ -29,7 +30,8 @@ module tb_la_packer;
     wire        v200;
 
     la_pattern #(.SAMPLE_MHZ(200)) u_pat200 (
-        .clk(clk), .rst(rst), .source(2'd0), .s0(p200_s0), .s1(p200_s1)
+        .clk(clk), .rst(rst), .enable(1'b1), .soft_rst(1'b0),
+        .source(2'd0), .s0(p200_s0), .s1(p200_s1)
     );
     la_packer #(.SAMPLE_MHZ(200)) u_pack200 (
         .clk(clk), .rst(rst), .enable(1'b1),
@@ -42,7 +44,8 @@ module tb_la_packer;
     wire        vw;
 
     la_pattern #(.SAMPLE_MHZ(100)) u_patw (
-        .clk(clk), .rst(rst), .source(2'd1), .s0(pw_s0), .s1(pw_s1)
+        .clk(clk), .rst(rst), .enable(1'b1), .soft_rst(1'b0),
+        .source(2'd1), .s0(pw_s0), .s1(pw_s1)
     );
     la_packer #(.SAMPLE_MHZ(100)) u_packw (
         .clk(clk), .rst(rst), .enable(1'b1),

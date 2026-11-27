@@ -1,7 +1,8 @@
 `timescale 1ns / 1ps
 // Parallel DDR3 writer stub. NOT in the USB streaming path.
-// Counts packed words so the insertion point exists; Phase 3 replaces
-// this with MIG pre-trigger DMA. Do not add ready/backpressure here.
+// Counts packed words so the insertion point exists. Phase 3 pre-trigger
+// is BRAM, not MIG; a later phase may replace this with DDR3 DMA.
+// Do not add ready/backpressure here.
 module la_ddr3_stub (
     input  wire        clk,
     input  wire        rst,

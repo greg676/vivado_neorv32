@@ -122,6 +122,19 @@ make -C host/ft601-loopback selftest
 
 Pinout defaults to first-batch `PT_ALPHA` (matches this repo's existing FT601 notes). Production Pt V2: `set ft601_pinout "v2"` before sourcing the TCL. Host tool + SDK notes: `host/ft601-loopback/README.md`.
 
+## Logic analyzer capture (separate top)
+
+8-channel sampler with edge trigger and BRAM circular pre-trigger. Dedicated top — NeoRV32 is not instantiated. No DDR3 MIG in this bitstream.
+
+```bash
+cd platforms/alchitry-platinum-v2
+vivado -mode batch -source tcl/rebuild_la_capture.tcl
+make -C host/ft601-capture selftest
+make -C sim/la
+```
+
+Host dump (trigger position in the LAT3 header): `host/ft601-capture/README.md`.
+
 ## Status
 
 **Active.** Bitstream v0.29, firmware debug-console rev0. MCP server v3 tested against live hardware. FT601 loopback sources are in-tree; Vivado synthesis of that top is not run in CI.

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""FT601 capture dump: packed 8-bit LA samples as 32-bit little-endian words.
+"""FT601 triggered capture dump: LAT3 header + packed 8-bit LA samples.
 
-Reads the LA capture bitstream (not the loopback top). Prints timestamped
-blocks and optionally writes the raw packed stream. --self-test does not
-need the D3XX SDK.
+Writes START/STOP, reads the 8-word header (trigger position, overflow/drop),
+then packed little-endian payload. --self-test does not need the D3XX SDK.
 """
 
 from __future__ import annotations
@@ -14,17 +13,66 @@ import os
 import sys
 import time
 from ctypes import POINTER, c_uint8, c_ulong, c_void_p
-from typing import List, Optional, TextIO, Tuple
+from typing import List, Optional, Tuple
 
 PIPE_OUT = 0x02
 PIPE_IN = 0x82
 FT_OK = 0
 FT_OPEN_BY_INDEX = 0
 WORD = 4
+HDR_WORDS = 8
+LAT3_MAGIC = 0x3354414C
+LAT3_VERSION = 1
+
+CMD_NOP = 0
+CMD_CFG = 1
+CMD_START = 2
+CMD_STOP = 3
+CMD_FORCE = 4
+
+EDGE_RISE = 0
+EDGE_FALL = 1
+EDGE_BOTH = 2
+EDGE_IMM = 3
+EDGES = {"rise": EDGE_RISE, "rising": EDGE_RISE, "fall": EDGE_FALL,
+         "falling": EDGE_FALL, "both": EDGE_BOTH, "imm": EDGE_IMM,
+         "immediate": EDGE_IMM}
 
 SRC_COUNTER = 0
 SRC_WALKING = 1
 SRC_LIVE = 2
+
+
+def make_cmd(cmd: int, src: int, ch: int, edge: int, post: int) -> int:
+    return ((cmd & 0xF) | ((src & 3) << 4) | ((ch & 7) << 6) |
+            ((edge & 3) << 9) | ((post & 0xFFFF) << 16))
+
+
+def parse_header(words: List[int]) -> dict:
+    if len(words) < HDR_WORDS:
+        raise ValueError("header too short")
+    status = words[2]
+    hdr = {
+        "magic": words[0],
+        "version": words[1],
+        "status": status,
+        "nsamples": words[3],
+        "trig_pos": words[4],
+        "overflow": words[5],
+        "drop": words[6],
+        "post_cfg": words[7] & 0xFFFF,
+        "source": status & 3,
+        "channel": (status >> 2) & 7,
+        "edge": (status >> 5) & 3,
+        "triggered": bool((status >> 8) & 1),
+        "aborted": bool((status >> 10) & 1),
+        "immediate": bool((status >> 11) & 1),
+    }
+    if hdr["magic"] != LAT3_MAGIC:
+        raise ValueError(f"bad MAGIC 0x{hdr['magic']:08x}")
+    if hdr["version"] != LAT3_VERSION:
+        raise ValueError(f"bad VERSION {hdr['version']}")
+    return hdr
 
 
 def pack_word(s0: int, s1: int, s2: int, s3: int) -> int:
@@ -41,62 +89,84 @@ def sample_at(idx: int, source: int) -> int:
     return idx & 0xFF
 
 
-def expected_word(word_idx: int, source: int) -> int:
-    base = word_idx * 4
-    return pack_word(
-        sample_at(base, source),
-        sample_at(base + 1, source),
-        sample_at(base + 2, source),
-        sample_at(base + 3, source),
-    )
+def expected_word_n(sample_base: int, nsamples: int, source: int) -> int:
+    s = []
+    for i in range(4):
+        idx = sample_base + i
+        s.append(sample_at(idx, source) if idx < nsamples else 0)
+    return pack_word(*s)
 
 
-def verify_packed(words: List[int], start_word: int, source: int
-                  ) -> Tuple[int, int, Optional[Tuple[int, int, int]]]:
+def verify_packed_n(words: List[int], nsamples: int, source: int
+                    ) -> Tuple[int, int, Optional[Tuple[int, int, int]]]:
     ok = 0
     bad = 0
     first = None
     for i, value in enumerate(words):
-        exp = expected_word(start_word + i, source)
+        exp = expected_word_n(i * 4, nsamples, source)
         if value == exp:
             ok += 1
         else:
             if first is None:
-                first = (start_word + i, value, exp)
+                first = (i, value, exp)
             bad += 1
     return ok, bad, first
 
 
 def self_test() -> int:
-    ctr = [expected_word(i, SRC_COUNTER) for i in range(16)]
-    ok, bad, first = verify_packed(ctr, 0, SRC_COUNTER)
-    if ok != 16 or bad != 0 or unpack_word(ctr[0]) != (0, 1, 2, 3):
-        print("self-test: counter pack/unpack failed", file=sys.stderr)
+    cmd = make_cmd(CMD_START, 0, 3, EDGE_FALL, 64)
+    if ((cmd >> 16) & 0xFFFF) != 64 or (cmd & 0xF) != CMD_START:
+        print(f"self-test: command packing is wrong (0x{cmd:08x})", file=sys.stderr)
         return 1
-    if unpack_word(ctr[1]) != (4, 5, 6, 7):
-        print("self-test: counter word 1 packing is wrong", file=sys.stderr)
+    if ((cmd >> 6) & 7) != 3 or ((cmd >> 9) & 3) != EDGE_FALL:
+        print(f"self-test: command ch/edge packing is wrong (0x{cmd:08x})", file=sys.stderr)
+        return 1
+    if make_cmd(CMD_STOP, 0, 0, 0, 0) != CMD_STOP:
+        print("self-test: STOP command packing is wrong", file=sys.stderr)
         return 1
 
-    walk = [expected_word(i, SRC_WALKING) for i in range(4)]
-    if unpack_word(walk[0]) != (0x01, 0x02, 0x04, 0x08):
+    hdr_words = [
+        LAT3_MAGIC, LAT3_VERSION,
+        (1 << 8),  # triggered, rise, ch0, counter
+        6, 1, 0, 0, 4,
+    ]
+    hdr = parse_header(hdr_words)
+    if not hdr["triggered"] or hdr["trig_pos"] != 1 or hdr["nsamples"] != 6:
+        print("self-test: header parse failed", file=sys.stderr)
+        return 1
+    bad = list(hdr_words)
+    bad[0] ^= 1
+    try:
+        parse_header(bad)
+        print("self-test: bad MAGIC did not fail closed", file=sys.stderr)
+        return 1
+    except ValueError:
+        pass
+
+    ctr = [expected_word_n(i * 4, 64, SRC_COUNTER) for i in range(16)]
+    ok, badn, first = verify_packed_n(ctr, 64, SRC_COUNTER)
+    if ok != 16 or badn != 0 or unpack_word(ctr[0]) != (0, 1, 2, 3):
+        print("self-test: counter pack/unpack failed", file=sys.stderr)
+        return 1
+
+    walk = expected_word_n(0, 8, SRC_WALKING)
+    if unpack_word(walk) != (0x01, 0x02, 0x04, 0x08):
         print("self-test: walking word 0 packing is wrong", file=sys.stderr)
         return 1
-    if unpack_word(walk[1]) != (0x10, 0x20, 0x40, 0x80):
-        print("self-test: walking word 1 packing is wrong", file=sys.stderr)
-        return 1
-    ok, bad, first = verify_packed(walk, 0, SRC_WALKING)
-    if ok != 4 or bad != 0:
-        print("self-test: walking verify failed", file=sys.stderr)
+
+    padded = expected_word_n(4, 6, SRC_COUNTER)
+    if unpack_word(padded) != (4, 5, 0, 0):
+        print("self-test: pad bytes must be zero past nsamples", file=sys.stderr)
         return 1
 
     broken = list(ctr)
     broken[2] ^= 0x00000100
-    ok, bad, first = verify_packed(broken, 0, SRC_COUNTER)
-    if bad != 1 or first is None or first[0] != 2:
-        print(f"self-test: verifier did not fail closed (bad={bad} first={first})",
+    ok, badn, first = verify_packed_n(broken, 64, SRC_COUNTER)
+    if badn != 1 or first is None or first[0] != 2:
+        print(f"self-test: verifier did not fail closed (bad={badn} first={first})",
               file=sys.stderr)
         return 1
-    print("self-test PASS (packer round-trip + matcher fails closed)")
+    print("self-test PASS (cmd + LAT3 header + packer, matcher fails closed)")
     return 0
 
 
@@ -143,16 +213,15 @@ def bytes_to_words(buf: bytes) -> List[int]:
     return [int.from_bytes(buf[i:i + 4], "little") for i in range(0, len(buf), 4)]
 
 
-def log_block(stream: TextIO, t0: float, block: int, raw: bytes, words: List[int]) -> None:
-    now = time.perf_counter()
-    s0 = unpack_word(words[0]) if words else (None, None, None, None)
-    print(
-        f"t={now - t0:.6f}s  block={block}  bytes={len(raw)}  "
-        f"samples={len(raw)}  first={s0[0]:02x} {s0[1]:02x} {s0[2]:02x} {s0[3]:02x}"
-        if words else
-        f"t={now - t0:.6f}s  block={block}  bytes={len(raw)}  samples=0",
-        file=stream,
-    )
+def read_exact(lib, handle, nbytes: int) -> bytes:
+    rx = ctypes.create_string_buffer(nbytes)
+    xferred = c_ulong(0)
+    st = lib.FT_ReadPipe(handle, PIPE_IN, rx, nbytes, ctypes.byref(xferred), None)
+    if st != FT_OK:
+        raise RuntimeError(f"FT_ReadPipe {st}")
+    if int(xferred.value) != nbytes:
+        raise RuntimeError(f"short read {xferred.value} of {nbytes} bytes")
+    return rx.raw[:nbytes]
 
 
 def run_hw(args: argparse.Namespace) -> int:
@@ -167,72 +236,66 @@ def run_hw(args: argparse.Namespace) -> int:
     lib.FT_SetPipeTimeout(handle, PIPE_IN, args.timeout_ms)
 
     dump = open(args.dump, "wb") if args.dump else None
-    nwords = args.bytes // WORD
-    chunk = min(16 * 1024, nwords)
-    next_word = 0
-    bytes_done = 0
+    t0 = time.perf_counter()
     words_ok = 0
     words_bad = 0
-    odd_bytes = 0
     first_bad = None
-    block = 0
-    t0 = time.perf_counter()
 
     try:
-        if args.source is not None:
-            cmd = int(args.source).to_bytes(4, "little")
-            xferred = c_ulong(0)
-            st = lib.FT_WritePipe(handle, PIPE_OUT, cmd, 4, ctypes.byref(xferred), None)
-            if st != FT_OK or xferred.value != 4:
-                print(f"error: FT_WritePipe source select {st}", file=sys.stderr)
-                return 1
+        opcode = CMD_STOP if args.stop else CMD_START
+        cmd = make_cmd(opcode, args.source, args.channel, args.edge, args.post)
+        raw_cmd = cmd.to_bytes(4, "little")
+        xferred = c_ulong(0)
+        st = lib.FT_WritePipe(handle, PIPE_OUT, raw_cmd, 4, ctypes.byref(xferred), None)
+        if st != FT_OK or xferred.value != 4:
+            print(f"error: FT_WritePipe {st}", file=sys.stderr)
+            return 1
 
-        while bytes_done < args.bytes:
-            this = min(chunk, (args.bytes - bytes_done) // WORD)
-            rx = ctypes.create_string_buffer(this * WORD)
-            xferred = c_ulong(0)
-            st = lib.FT_ReadPipe(handle, PIPE_IN, rx, this * WORD,
-                                 ctypes.byref(xferred), None)
-            if st != FT_OK:
-                print(f"error: FT_ReadPipe {st}", file=sys.stderr)
-                break
-            n = int(xferred.value)
-            if n % WORD != 0:
-                print(f"error: odd read {n} bytes (not a whole word)", file=sys.stderr)
-                odd_bytes += n % WORD
-                break
-            raw = rx.raw[:n]
-            got = bytes_to_words(raw)
-            log_block(sys.stdout, t0, block, raw, got)
+        hdr_raw = read_exact(lib, handle, HDR_WORDS * WORD)
+        hdr = parse_header(bytes_to_words(hdr_raw))
+        tpos = hdr["trig_pos"] if hdr["triggered"] else None
+        print(
+            f"t=0.000000s  header  magic=LAT3  nsamp={hdr['nsamples']}  "
+            f"tpos={tpos}  ovf={hdr['overflow']}  drop={hdr['drop']}"
+        )
+
+        nwords = (hdr["nsamples"] + 3) // 4
+        payload = b""
+        if nwords:
+            payload = read_exact(lib, handle, nwords * WORD)
+            got = bytes_to_words(payload)
+            s0 = unpack_word(got[0]) if got else (0, 0, 0, 0)
+            now = time.perf_counter()
+            print(
+                f"t={now - t0:.6f}s  payload  bytes={len(payload)}  "
+                f"samples={hdr['nsamples']}  first={s0[0]:02x} {s0[1]:02x} {s0[2]:02x} {s0[3]:02x}"
+            )
             if dump is not None:
-                dump.write(raw)
+                dump.write(payload)
             if args.pattern != "none":
                 src = SRC_WALKING if args.pattern == "walking" else SRC_COUNTER
-                ok, bad, first = verify_packed(got, next_word, src)
-                words_ok += ok
-                words_bad += bad
-                if first_bad is None:
-                    first_bad = first
-            if len(got) != this:
-                odd_bytes += (this * WORD) - n
-                if args.pattern != "none":
-                    words_bad += this - len(got)
-            next_word += this
-            bytes_done += this * WORD
-            block += 1
+                words_ok, words_bad, first_bad = verify_packed_n(
+                    got, hdr["nsamples"], src
+                )
+    except (RuntimeError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     finally:
         lib.FT_Close(handle)
         if dump is not None:
             dump.close()
 
     dt = time.perf_counter() - t0
-    mibps = (bytes_done / (1024 * 1024) / dt) if dt > 0 else 0.0
-    print(f"mode        : capture dump")
-    print(f"bytes       : {bytes_done}")
-    print(f"samples     : {bytes_done}")
-    print(f"blocks      : {block}")
+    print("mode        : triggered capture")
+    print(f"triggered   : {'yes' if hdr['triggered'] else 'no'}")
+    print(f"trig_pos    : {hdr['trig_pos'] if hdr['triggered'] else 0xffffffff}")
+    print(f"nsamples    : {hdr['nsamples']}")
+    print(f"overflow    : {hdr['overflow']}")
+    print(f"drop        : {hdr['drop']}")
+    print(f"post_cfg    : {hdr['post_cfg']}")
+    print(f"channel     : {hdr['channel']}")
+    print(f"edge        : {hdr['edge']}")
     print(f"seconds     : {dt:.4f}")
-    print(f"throughput  : {mibps:.2f} MiB/s")
     if args.dump:
         print(f"dump        : {args.dump}")
     if args.pattern != "none":
@@ -242,35 +305,36 @@ def run_hw(args: argparse.Namespace) -> int:
         if first_bad:
             idx, got_v, exp = first_bad
             print(f"first_bad   : word={idx} got=0x{got_v:08x} exp=0x{exp:08x}")
-        if words_bad or odd_bytes or bytes_done != args.bytes:
-            print("FAIL: packed-sample mismatch or incomplete transfer", file=sys.stderr)
+        if words_bad:
+            print("FAIL: packed-sample mismatch", file=sys.stderr)
             return 1
         print("PASS")
         return 0
-    if odd_bytes or bytes_done != args.bytes:
-        print("FAIL: incomplete transfer", file=sys.stderr)
-        return 1
     print("PASS (dump only, pattern not checked)")
     return 0
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="FT601 LA capture dump (D3XX)")
-    p.add_argument("--bytes", type=int, default=16 * 1024 * 1024)
+    p = argparse.ArgumentParser(description="FT601 LA triggered capture dump (D3XX)")
     p.add_argument("--index", type=int, default=0)
     p.add_argument("--timeout-ms", type=int, default=5000)
-    p.add_argument("--dump", metavar="FILE", help="write packed little-endian words")
+    p.add_argument("--dump", metavar="FILE", help="write packed little-endian payload")
     p.add_argument("--pattern", choices=("counter", "walking", "none"), default="counter",
                    help="verify on-FPGA test pattern (default counter)")
-    p.add_argument("--source", type=int, choices=(0, 1, 2),
-                   help="write source select (0=counter 1=walking 2=live) before dump")
+    p.add_argument("--source", type=int, choices=(0, 1, 2), default=0,
+                   help="0=counter 1=walking 2=live")
+    p.add_argument("--channel", type=int, default=0, help="trigger channel 0-7")
+    p.add_argument("--edge", choices=tuple(EDGES.keys()), default="rise")
+    p.add_argument("--post", type=int, default=0, help="post-trigger samples (0=FPGA default)")
+    p.add_argument("--stop", action="store_true", help="send STOP instead of START")
     p.add_argument("--self-test", action="store_true")
     args = p.parse_args()
     if args.self_test:
         return self_test()
-    if args.bytes < WORD or args.bytes % WORD:
-        print("error: --bytes must be a positive multiple of 4", file=sys.stderr)
+    if not (0 <= args.channel <= 7):
+        print("error: --channel must be 0-7", file=sys.stderr)
         return 2
+    args.edge = EDGES[args.edge]
     try:
         return run_hw(args)
     except FileNotFoundError as exc:

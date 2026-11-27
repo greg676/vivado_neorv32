@@ -9,6 +9,10 @@
 #   set ft601_pinout   "v2"         ;# production Pt V2
 #   set la_sample_mhz  100          ;# or 200 (DDR @ 100 MHz ft_clk)
 #   set la_source      0            ;# 0=counter 1=walking 2=live
+#   set la_buf_depth   4096         ;# circular BRAM entries (power of two)
+#   set la_post        2048         ;# default post-trigger samples
+#   set la_trig_ch     0            ;# trigger channel 0-7
+#   set la_trig_edge   0            ;# 0=rise 1=fall 2=both 3=immediate
 
 if {![info exists ft601_pinout]} {
     set ft601_pinout "pt_alpha"
@@ -18,6 +22,18 @@ if {![info exists la_sample_mhz]} {
 }
 if {![info exists la_source]} {
     set la_source 0
+}
+if {![info exists la_buf_depth]} {
+    set la_buf_depth 4096
+}
+if {![info exists la_post]} {
+    set la_post 2048
+}
+if {![info exists la_trig_ch]} {
+    set la_trig_ch 0
+}
+if {![info exists la_trig_edge]} {
+    set la_trig_edge 0
 }
 
 if {$la_sample_mhz != 100 && $la_sample_mhz != 200} {
@@ -32,6 +48,10 @@ puts "LA capture project"
 puts "  pinout     : $ft601_pinout"
 puts "  sample_mhz : $la_sample_mhz"
 puts "  source     : $la_source  (0=counter 1=walking 2=live)"
+puts "  buf_depth  : $la_buf_depth  BRAM entries (not DDR3)"
+puts "  post       : $la_post  default post-trigger samples"
+puts "  trig_ch    : $la_trig_ch"
+puts "  trig_edge  : $la_trig_edge  (0=rise 1=fall 2=both 3=imm)"
 puts "  part       : $part"
 
 create_project -force $project_name $project_dir -part $part
@@ -44,6 +64,9 @@ add_files -fileset sources_1 [list \
     ./rtl/la/la_sampler.v \
     ./rtl/la/la_pattern.v \
     ./rtl/la/la_packer.v \
+    ./rtl/la/la_trig.v \
+    ./rtl/la/la_circ_bram.v \
+    ./rtl/la/la_capture_ctrl.v \
     ./rtl/la/la_ddr3_stub.v \
     ./rtl/la/la_capture_core.v \
     ./rtl/la/la_capture_top.v \
@@ -63,8 +86,14 @@ add_files -fileset constrs_1 [list \
 ]
 
 set_property top la_capture_top [current_fileset]
-set_property generic [list SAMPLE_MHZ=$la_sample_mhz DEFAULT_SOURCE=$la_source] \
-    [get_filesets sources_1]
+set_property generic [list \
+    SAMPLE_MHZ=$la_sample_mhz \
+    DEFAULT_SOURCE=$la_source \
+    BUF_DEPTH=$la_buf_depth \
+    DEFAULT_POST=$la_post \
+    DEFAULT_CH=$la_trig_ch \
+    DEFAULT_EDGE=$la_trig_edge \
+] [get_filesets sources_1]
 
 puts "Project created at $project_dir"
 puts "Next: open in Vivado and Generate Bitstream, or:"

@@ -1,11 +1,16 @@
 `timescale 1ns / 1ps
 // Logic-analyzer capture datapath in the ft_clk domain.
-// Live pins and on-FPGA patterns are muxed, packed 8→32, then streamed
-// with the existing FT601 245 master. Host RX is drained so a leftover
-// write cannot stall the PHY. DDR3 is a parallel tap only.
+// Live pins and on-FPGA patterns are muxed, edge-triggered into a BRAM
+// circular pre-trigger, then dumped over the existing FT601 245 master.
+// Host RX carries start/stop/cfg; leftover writes cannot stall the PHY
+// because RX is always accepted. DDR3 is still a parallel tap only.
 module la_capture_core #(
-    parameter integer SAMPLE_MHZ    = 100,
-    parameter [1:0]   DEFAULT_SOURCE = 2'd0
+    parameter integer SAMPLE_MHZ     = 100,
+    parameter [1:0]   DEFAULT_SOURCE = 2'd0,
+    parameter integer BUF_DEPTH      = 4096,
+    parameter integer DEFAULT_POST   = 2048,
+    parameter [2:0]   DEFAULT_CH     = 3'd0,
+    parameter [1:0]   DEFAULT_EDGE   = 2'd0
 ) (
     input  wire        ft_clk,
     input  wire        rst,
@@ -24,10 +29,16 @@ module la_capture_core #(
     output wire        fifo_full,
     output wire        tx_active,
     output wire [1:0]  source_sel,
+    output wire        armed,
+    output wire        triggered,
+    output wire        cap_done,
+    output wire [31:0] overflow_cnt,
+    output wire [31:0] drop_cnt,
     output wire [31:0] ddr3_word_count
 );
 
-    localparam [1:0] SRC_LIVE = 2'd2;
+    localparam integer ADDR_W   = $clog2(BUF_DEPTH);
+    localparam [1:0]   SRC_LIVE = 2'd2;
 
     wire [31:0] rx_data;
     wire        rx_valid;
@@ -38,20 +49,17 @@ module la_capture_core #(
     wire        tx_valid;
     wire        tx_ready;
 
-    reg [1:0] source_r;
-    always @(posedge ft_clk) begin
-        if (rst)
-            source_r <= DEFAULT_SOURCE;
-        else if (rx_valid)
-            source_r <= rx_data[1:0];
-    end
-    assign source_sel = source_r;
+    wire [1:0]  source_r;
+    wire        pattern_en;
+    wire        pattern_rst;
 
-    wire        use_live = (source_r == SRC_LIVE) || (source_r == 2'd3);
     wire [7:0]  live_s0, live_s1;
     wire [7:0]  pat_s0, pat_s1;
+    wire        use_live = (source_r == SRC_LIVE) || (source_r == 2'd3);
     wire [7:0]  mux_s0 = use_live ? live_s0 : pat_s0;
     wire [7:0]  mux_s1 = use_live ? live_s1 : pat_s1;
+
+    assign source_sel = source_r;
 
     la_sampler #(
         .SAMPLE_MHZ(SAMPLE_MHZ)
@@ -66,13 +74,17 @@ module la_capture_core #(
     la_pattern #(
         .SAMPLE_MHZ(SAMPLE_MHZ)
     ) u_pattern (
-        .clk    (ft_clk),
-        .rst    (rst),
-        .source (source_r),
-        .s0     (pat_s0),
-        .s1     (pat_s1)
+        .clk      (ft_clk),
+        .rst      (rst),
+        .enable   (pattern_en),
+        .soft_rst (pattern_rst),
+        .source   (source_r),
+        .s0       (pat_s0),
+        .s1       (pat_s1)
     );
 
+    wire [7:0]  pack_s0, pack_s1;
+    wire        pack_en;
     wire [31:0] pack_data;
     wire        pack_valid;
 
@@ -81,30 +93,68 @@ module la_capture_core #(
     ) u_packer (
         .clk       (ft_clk),
         .rst       (rst),
-        .enable    (1'b1),
-        .s0        (mux_s0),
-        .s1        (mux_s1),
+        .enable    (pack_en),
+        .s0        (pack_s0),
+        .s1        (pack_s1),
         .out_data  (pack_data),
         .out_valid (pack_valid)
+    );
+
+    wire [31:0] fifo_wdata;
+    wire        fifo_wr;
+    wire        fifo_full_w;
+    wire        fifo_empty_w;
+    wire        fifo_afull;
+    wire [31:0] fifo_rdata;
+
+    la_capture_ctrl #(
+        .SAMPLE_MHZ     (SAMPLE_MHZ),
+        .DEFAULT_SOURCE (DEFAULT_SOURCE),
+        .BUF_DEPTH      (BUF_DEPTH),
+        .ADDR_W         (ADDR_W),
+        .DEFAULT_POST   (DEFAULT_POST),
+        .DEFAULT_CH     (DEFAULT_CH),
+        .DEFAULT_EDGE   (DEFAULT_EDGE)
+    ) u_ctrl (
+        .clk              (ft_clk),
+        .rst              (rst),
+        .s0               (mux_s0),
+        .s1               (mux_s1),
+        .rx_valid         (rx_valid),
+        .rx_data          (rx_data),
+        .source_sel       (source_r),
+        .pattern_en       (pattern_en),
+        .pattern_rst      (pattern_rst),
+        .pack_s0          (pack_s0),
+        .pack_s1          (pack_s1),
+        .pack_en          (pack_en),
+        .pack_data        (pack_data),
+        .pack_valid       (pack_valid),
+        .fifo_wdata       (fifo_wdata),
+        .fifo_wr          (fifo_wr),
+        .fifo_full        (fifo_full_w),
+        .fifo_almost_full (fifo_afull),
+        .armed            (armed),
+        .triggered_o      (triggered),
+        .cap_done         (cap_done),
+        .overflow_sticky  (overflow_sticky),
+        .overflow_cnt     (overflow_cnt),
+        .drop_cnt         (drop_cnt)
     );
 
     // Parallel tap — must not backpressure the packer / FT601 path.
     la_ddr3_stub u_ddr3 (
         .clk          (ft_clk),
         .rst          (rst),
-        .sample_word  (pack_data),
-        .sample_valid (pack_valid),
+        .sample_word  (fifo_wdata),
+        .sample_valid (fifo_wr),
         .word_count   (ddr3_word_count)
     );
-
-    wire        fifo_full_w;
-    wire        fifo_empty_w;
-    wire [31:0] fifo_rdata;
 
     assign fifo_empty = fifo_empty_w;
     assign fifo_full  = fifo_full_w;
 
-    wire wr_en = pack_valid && !fifo_full_w;
+    wire wr_en = fifo_wr && !fifo_full_w;
 
     ft601_fwft_fifo #(
         .WIDTH (32),
@@ -113,19 +163,19 @@ module la_capture_core #(
     ) u_fifo (
         .clk         (ft_clk),
         .rst         (rst),
-        .wr_data     (pack_data),
+        .wr_data     (fifo_wdata),
         .wr_en       (wr_en),
         .full        (fifo_full_w),
-        .almost_full (),
+        .almost_full (fifo_afull),
         .rd_data     (fifo_rdata),
         .rd_en       (tx_ready),
         .empty       (fifo_empty_w),
         .count       ()
     );
 
-    assign tx_data  = fifo_rdata;
-    assign tx_be    = 4'hF;
-    assign tx_valid = !fifo_empty_w;
+    assign tx_data   = fifo_rdata;
+    assign tx_be     = 4'hF;
+    assign tx_valid  = !fifo_empty_w;
     assign tx_active = tx_ready;
 
     ft601_sync_fifo u_phy (
@@ -147,14 +197,5 @@ module la_capture_core #(
         .tx_valid (tx_valid),
         .tx_ready (tx_ready)
     );
-
-    reg ovf;
-    always @(posedge ft_clk) begin
-        if (rst)
-            ovf <= 1'b0;
-        else if (pack_valid && fifo_full_w)
-            ovf <= 1'b1;
-    end
-    assign overflow_sticky = ovf;
 
 endmodule
