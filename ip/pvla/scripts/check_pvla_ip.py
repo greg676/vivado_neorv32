@@ -83,7 +83,14 @@ def check_xdc_map(xdc: Path, data_0_13: list[str], common: dict[str, str]) -> No
 
 
 def main() -> int:
-    hdl = ["hdl/pvla.v", "hdl/pvla_capture.v", "hdl/pvla_axi_lite.v"]
+    hdl = [
+        "hdl/pvla.v",
+        "hdl/pvla_capture.v",
+        "hdl/pvla_axi_lite.v",
+        "hdl/pvla_word_packer.v",
+        "hdl/pvla_clk_wiz.v",
+        "hdl/pvla_internal_src.v",
+    ]
     xdc = [
         "xdc/ftplus_ft601_pt_alpha.xdc",
         "xdc/ftplus_ft601_pt_v2.xdc",
@@ -118,11 +125,18 @@ def main() -> int:
 
     top = (IP / "hdl" / "pvla.v").read_text()
     for param in (
-        "C_NUM_CH", "C_SAMPLE_MHZ", "C_PRETRIG_SAMPLES", "C_PHY",
+        "C_NUM_CH", "C_SAMPLE_MHZ", "C_SAMPLE_DIV", "C_SAMPLE_CLK_SRC",
+        "C_INPUT_PATH", "C_PAD_MODE", "C_PRETRIG_SAMPLES", "C_PHY",
         "C_BOARD", "C_HAS_AXI", "C_INCLUDE_BR_XDC",
     ):
         if f"parameter integer {param}" not in top:
             err(f"pvla.v missing parameter {param}")
+    if "parameter integer C_BOARD           = 2" not in top \
+            and "parameter integer C_BOARD = 2" not in top:
+        if "C_BOARD           = 2" not in top:
+            err("pvla.v default C_BOARD should be AU_V2 (2)")
+    if "C_SAMPLE_MHZ      = 200" not in top and "C_SAMPLE_MHZ = 200" not in top:
+        err("pvla.v default C_SAMPLE_MHZ should be 200 (8ch advertised, 50 Mword/s USB)")
     if "probe_i" not in top:
         err("pvla.v missing probe_i")
     if "s_axi_awaddr" not in top:
@@ -134,14 +148,41 @@ def main() -> int:
         err("pvla.v must not instantiate MIG/DDR3")
     if re.search(r"\bneorv32\b", top_code, re.I):
         err("pvla.v must not instantiate NeoRV32")
+    if "pvla_clk_wiz" not in top:
+        err("pvla.v must instantiate the MMCM clocking wizard (pvla_clk_wiz)")
+
+    packer = (IP / "hdl" / "pvla_word_packer.v").read_text()
+    for token in (
+        "g_pack4", "g_pack8", "g_pack16", "word_o", "C_NUM_CH",
+        "word_o[31:28]", "word_o[31:24]", "word_o[31:16]",
+    ):
+        if token not in packer:
+            err(f"pvla_word_packer.v missing {token}")
+    if "IDDR" in packer:
+        err("simple packer must not use IDDR (SDR first cut)")
+
+    wiz = (IP / "hdl" / "pvla_clk_wiz.v").read_text()
+    for token in ("MMCME2_BASE", "clk100", "clk200", "clk400", "CLKIN1_PERIOD"):
+        if token not in wiz:
+            err(f"pvla_clk_wiz.v missing {token}")
+    if "neorv32" in wiz.lower():
+        err("pvla_clk_wiz.v must not touch NeoRV32")
 
     cap = (IP / "hdl" / "pvla_capture.v").read_text()
     if "C_PHY" not in cap or "ft601_sync_fifo" not in cap:
         err("pvla_capture.v must wrap FT601 PHY")
     if "m_axis_tdata" not in cap:
         err("pvla_capture.v missing STREAM master")
-    if "ALWAYS_DRIVE" not in cap:
-        err("pvla_capture.v must instantiate PHY with ALWAYS_DRIVE")
+    for inst in ("u_pack4", "u_pack8", "u_pack16"):
+        if inst not in cap:
+            err(f"pvla_capture.v must instantiate live {inst} (not generate-one-mode)")
+    if re.search(r"pvla_word_packer\s+#\(\s*\.C_NUM_CH\s*\(\s*C_NUM_CH\s*\)", cap):
+        err("pvla_capture.v must not generate-one-mode-only; mux u_pack4/8/16 by width")
+    if ".ALWAYS_DRIVE   (C_PAD_MODE)" not in cap and "ALWAYS_DRIVE   (C_PAD_MODE)" not in cap:
+        if "C_PAD_MODE" not in cap or "ALWAYS_DRIVE" not in cap:
+            err("pvla_capture.v must pass C_PAD_MODE as PHY ALWAYS_DRIVE")
+    if "rx_ready (1'b0)" not in cap and ".rx_ready (1'b0)" not in cap:
+        err("pvla_capture.v must keep RX unused (rx_ready=0) for TX-only host IN")
     if "TX_BURST_WORDS" not in cap:
         err("pvla_capture.v must set TX_BURST_WORDS (4 KiB bursts)")
     if "ft601_fwft_fifo" in cap:
@@ -163,21 +204,32 @@ def main() -> int:
 
     xml = (IP / "component.xml").read_text()
     for token in (
-        "greg676", "pvla", "C_NUM_CH", "probe_i",
+        "greg676", "pvla", "C_NUM_CH", "C_INPUT_PATH", "C_PAD_MODE",
+        "C_SAMPLE_DIV", "C_SAMPLE_CLK_SRC", "probe_i",
         "ftplus_ft601_pt_alpha.xdc", "ftplus_ft601_pt_v2.xdc",
         "ftplus_ft601_au_v2.xdc",
         "xgui/pvla_v1_0.tcl", "SCOPED_TO_REF",
         "alchitry-au-v2/rtl/ft601/ft601_sync_fifo.v",
+        "hdl/pvla_word_packer.v", "hdl/pvla_clk_wiz.v", "hdl/pvla_internal_src.v",
+        "4 ch (8 samples/word)", "IOBUF 245",
+        "400 MS/s (4ch)", "200 MS/s (8ch)", "100 MS/s (16ch)",
+        "50 Mword/s USB",
     ):
         if token not in xml:
             err(f"component.xml missing {token!r}")
+    if "xilinx:fileInfo" in xml:
+        err("component.xml must not use nested xilinx:fileInfo (IP_Flow 19-395)")
     if "alchitry-platinum-v2/rtl/la/" in xml:
         err("component.xml still references the old platinum LA stack")
     if "alchitry-platinum-v2/rtl/ft601/" in xml:
         err("component.xml still references the old platinum echo PHY")
 
     gui = (IP / "xgui" / "pvla_v1_0.tcl").read_text()
-    for token in ("C_NUM_CH", "C_PHY", "C_BOARD", "init_gui"):
+    for token in (
+        "C_NUM_CH", "C_PHY", "C_BOARD", "C_INPUT_PATH", "C_PAD_MODE",
+        "C_SAMPLE_DIV", "C_SAMPLE_CLK_SRC", "init_gui", "usb_Mword",
+        "400/200/100", "50 Mword/s", "MMCM",
+    ):
         if token not in gui:
             err(f"xgui missing {token}")
 
@@ -190,6 +242,14 @@ def main() -> int:
         err("packager must reference Au PHY RTL")
     if "AU_V2" not in pkg:
         err("packager GUI must offer AU_V2 board pinout")
+    if "pvla_word_packer.v" not in pkg:
+        err("packager must include the visible word packer")
+    if "pvla_clk_wiz.v" not in pkg:
+        err("packager must include the MMCM clocking wizard wrapper")
+    if "C_PAD_MODE" not in pkg:
+        err("packager GUI must offer C_PAD_MODE (IOBUF vs ALWAYS_DRIVE)")
+    if "400/200/100" not in pkg and "400 MS/s" not in pkg:
+        err("packager GUI must advertise 400/200/100 MS/s, not 800/400/200")
 
     for example_path in (
         PLAT / "tcl" / "pvla_bd_example.tcl",
@@ -205,10 +265,20 @@ def main() -> int:
             err(f"{example_path}: missing PVLA VLNV")
         if "make_bd_pins_external -name probe_i" not in example:
             err(f"{example_path}: must export probe_i")
+        if "must be 4, 8, or 16" not in example:
+            err(f"{example_path.name}: example BD must allow 4/8/16 channels")
         if re.search(r"create_bd_cell\s+-type\s+ip\s+.*mig", example, re.I):
             err(f"{example_path}: must not instantiate MIG")
         if re.search(r"create_bd_cell\s+.*neorv32", code_lines, re.I):
             err(f"{example_path}: must not instantiate NeoRV32")
+
+    golden = IP / "scripts" / "tb_pvla_word_packer.py"
+    must_exist(golden)
+    if not ERRORS:
+        import runpy
+        ns = runpy.run_path(str(golden), run_name="pvla_pack_golden")
+        if "main" in ns and ns["main"]():
+            err("tb_pvla_word_packer.py golden failed")
 
     if ERRORS:
         print("PVLA IP check FAILED:")
@@ -218,7 +288,8 @@ def main() -> int:
     print("PVLA IP check PASS")
     print(f"  IP dir : {IP}")
     print("  VLNV   : greg676:user:pvla:1.0")
-    print("  PHY    : Au PR #18/#19 Lucid WR, 4 KiB, ALWAYS_DRIVE")
+    print("  Packer : 4/8/16 ch -> 32-bit USB word (visible RTL)")
+    print("  PHY    : Au PR #18/#19 Lucid WR, 4 KiB, IOBUF default, RX unused")
     print("  XDC    : PT_ALPHA / PT_V2 / AU_V2 DATA[0:13] match pin maps")
     return 0
 

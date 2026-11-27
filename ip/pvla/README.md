@@ -1,10 +1,10 @@
 # PVLA Vivado IP
 
-Catalog IP for the PulseView logic analyzer. Same packaging pattern as the NEORV32 IP already used in this repo (`ipx::package_project` + xgui pages + HDL parameters that resize ports).
+Catalog IP for the PulseView logic analyzer. Same packaging pattern as the NEORV32 IP already used in this repo (`ipx::package_project` + xgui pages + HDL generics that resize ports).
 
 **VLNV:** `greg676:user:pvla:1.0`
 
-PHY is the **PR #18/#19** Lucid DATA-before-WR core with **4 KiB write bursts** and `ALWAYS_DRIVE` (`platforms/alchitry-au-v2/rtl/ft601/`). Not the old echo that starved WR. NeoRV32 is not rewritten. No MIG.
+Educational **4 / 8 / 16-channel packer**: N samples fill one 32-bit USB word. First board is **Alchitry Au V2 + Ft+ FT601**. PHY is the PR #18/#19 Lucid DATA-before-WR core with **4 KiB write bursts**. Default pads are **IOBUF 245** (real 32-bit inout, TX-only protocol, RX unused). `ALWAYS_DRIVE` is an escape hatch. NeoRV32 is not rewritten. No MIG. No QSPI.
 
 ## Add to a project
 
@@ -12,33 +12,44 @@ PHY is the **PR #18/#19** Lucid DATA-before-WR core with **4 KiB write bursts** 
 Settings → IP → Repository → <repo>/ip
 ```
 
-Refresh the catalog. Drop **PVLA** on a Block Design. Set **Channels (1–8)**; `probe_i` resizes. Leave **PHY = FT601** for Ft+. Pick **PT_ALPHA**, **PT_V2**, or **AU_V2**.
+Refresh the catalog. Drop **PVLA** on a Block Design. Default config streams an internal counter (8 ch, Au pinout) without wiring. Route the signal under study into `probe_i` (internal BD probe) or switch the path to external LVCMOS33 pins.
 
-FT601 pads are I/O of the IP so an IP-scoped XDC can bind package pins (the MIG “pin file” analogue). They are **not** meant to be wired cell-to-cell on the canvas. The example BD TCL — and `bd/bd.tcl` — promote them to the wrapper as `ft_clk`, `ft_data[31:0]`, … matching the XDC names.
+FT601 pads are I/O of the IP so an IP-scoped XDC can bind package pins (the MIG “pin file” analogue). They are **not** meant to be wired cell-to-cell on the canvas.
 
-Probe ports stay on the canvas for you to wire. Optional **Include Br Bank A probe XDC** is off by default.
+## Packing (32-bit USB word, `BE=0xF`)
+
+| `C_NUM_CH` | Samples / word | Layout (oldest → newest) |
+|---|---|---|
+| 4 | 8 | `[3:0]=t+0` … `[31:28]=t+7` |
+| **8** (default) | 4 | `[7:0]=t+0` … `[31:24]=t+3` |
+| 16 | 2 | `[15:0]=t+0` … `[31:16]=t+1` |
+
+RTL: `hdl/pvla_word_packer.v` — capture instantiates **u_pack4, u_pack8, and u_pack16** (all live) and muxes by `C_NUM_CH`. MMCM (`hdl/pvla_clk_wiz.v`) from `ft_clk` makes **400 / 200 / 100 MHz** for 4 / 8 / 16 ch.
 
 ## GUI parameters
 
 | Parameter | Default | Effect |
 |---|---|---|
-| `C_NUM_CH` | 8 | `probe_i[C_NUM_CH-1:0]` |
-| `C_SAMPLE_MHZ` | 200 | 100 SDR or 200 DDR @ 100 MHz `ft_clk` |
-| `C_PRETRIG_SAMPLES` | 4096 | BRAM depth, power of two. Not DDR3. Live dumps 4 KiB PHY bursts. |
-| `C_DEFAULT_POST` | 2048 | Post-trigger samples |
-| `C_DEFAULT_SOURCE` | Live | Counter / walking-one / live |
+| `C_NUM_CH` | **8** | 4 / 8 / 16 packing mode; resizes `probe_i` |
+| `C_INPUT_PATH` | Internal | Internal fabric **or** external pins (not mixed) |
+| `C_DEFAULT_SOURCE` | Counter | Counter / walking-one / BD `probe_i` (internal path only) |
+| `C_SAMPLE_CLK_SRC` | MMCM from ft_clk | 400/200/100 MHz for 4/8/16 ch, or external `sample_clk` |
+| `C_SAMPLE_MHZ` | **200** (8 ch) | Advertised MS/s: **400 / 200 / 100** for 4 / 8 / 16 ch (50 Mword/s USB). Not 800/400/200. |
+| `C_SAMPLE_DIV` | 1 | Extra 1 / 2 / 4 / 8. Default 1 keeps 50 Mword/s USB |
+| `C_PAD_MODE` | IOBUF 245 | IOBUF (default) or ALWAYS_DRIVE |
 | `C_PHY` | FT601 | STREAM exposes `m_axis_*` |
-| `C_BOARD` | PT_ALPHA | PT_ALPHA / PT_V2 / AU_V2 Ft+ XDC |
-| `C_HAS_AXI` | Enabled | AXI4-Lite arm/trigger/status |
+| `C_BOARD` | **AU_V2** | PT_ALPHA / PT_V2 / AU_V2 Ft+ XDC |
+| `C_HAS_AXI` | Off | AXI4-Lite arm/trigger/status |
+| `C_PRETRIG_SAMPLES` | 4096 | BRAM depth, power of two. Not DDR3. |
 | `C_INCLUDE_BR_XDC` | No | Optional Br Bank A `probe_i` pins (Pt) |
 
-Counter / walking-one match the Au LA capture PASS (one 32-bit word per `tx_ready`, 4 samples packed little-endian). Live probes fill a 1024-word ping-pong so the FT601 never sees a short write.
+Rate math: `usb_Mword/s = C_SAMPLE_MHZ / (32 / C_NUM_CH) / C_SAMPLE_DIV`. Advertised **400 / 200 / 100 MS/s** (4 / 8 / 16 ch) at div=1 is **50 Mword/s** USB. Do not advertise 800 / 400 / 200 (one packed word per `ft_clk`, 100 Mword/s bench fill).
 
 ## Ports
 
 **Always**
 
-- `probe_i[C_NUM_CH-1:0]` — user-wired
+- `probe_i[C_NUM_CH-1:0]` — BD fabric or external pins
 - `status_o[7:0]`
 
 **FT601 (`C_PHY=0`) — auto-promoted, IP XDC, not BD clutter**
@@ -46,10 +57,11 @@ Counter / walking-one match the Au LA capture PASS (one 32-bit word per `tx_read
 - `clk`, `rst_n` — board clock for the PHY reset sequencer
 - `ft_clk`, `ft_data[31:0]`, `ft_be[3:0]`, `ft_rxf`, `ft_txe`, `ft_oe`, `ft_rd`, `ft_wr`, `ft_reset`, `ft_wakeup`
 
-**STREAM (`C_PHY=1`)**
+**Sample clock (`C_SAMPLE_CLK_SRC=1` or STREAM)**
 
 - `sample_clk`, `sample_rst_n`
-- `m_axis_{tdata,tvalid,tready,tlast,tkeep}`
+
+**STREAM (`C_PHY=1`)** — `m_axis_{tdata,tvalid,tready,tlast,tkeep}`
 
 **AXI (`C_HAS_AXI=1`)** — `s_axi_*` (32-bit, addr 8-bit)
 
@@ -65,31 +77,29 @@ Counter / walking-one match the Au LA capture PASS (one 32-bit word per `tx_read
 
 | Path | Role |
 |---|---|
+| `hdl/pvla_word_packer.v` | One width's mux/shift; capture instantiates all three |
+| `hdl/pvla_clk_wiz.v` | MMCME2_BASE: ft_clk 100 → 100/200/400 MHz |
+| `hdl/pvla_internal_src.v` | Counter / walking-one / probe mux |
 | `hdl/pvla.v` | IP top |
-| `hdl/pvla_capture.v` | Packer + 4 KiB ping-pong + PHY mux |
+| `hdl/pvla_capture.v` | Packer + 4 KiB ping-pong + PHY |
 | `hdl/pvla_axi_lite.v` | AXI4-Lite |
-| `xdc/ftplus_ft601_pt_alpha.xdc` | First-batch Ft+ pins |
-| `xdc/ftplus_ft601_pt_v2.xdc` | Production Pt Ft+ pins |
-| `xdc/ftplus_ft601_au_v2.xdc` | Au V2 Ft+ pins (proven PHY board) |
-| `xdc/ftplus_ft601_timing.xdc` | I/O delays (PR #18 0.90 ns output) |
-| `xdc/ftplus_ft601_impl.xdc` | IOB packing |
-| `xdc/br_bank_a_8ch.xdc` | Optional probe pins |
-| `pvla_vivado_ip.tcl` | Packager (run in Vivado to refresh `component.xml`) |
+| `xdc/ftplus_ft601_*.xdc` | Ft+ pins / timing / IOB |
+| `pvla_vivado_ip.tcl` | Packager |
 | `xgui/pvla_v1_0.tcl` | GUI |
-| `bd/bd.tcl` | Auto-promote FT601 pads |
-| `pvla_v1_0_upgrade.tcl` | Old BD still opens |
+| `scripts/tb_pvla_word_packer.py` | Golden pack (no Vivado) |
+| `scripts/check_pvla_ip.py` | Structural check |
 
 PHY RTL is referenced from `platforms/alchitry-au-v2/rtl/ft601/` (not copied). This IP does not rewrite NeoRV32.
 
 ## Example BD
 
 ```bash
-# Pt (part xc7a100t) — docs path
-cd platforms/alchitry-platinum-v2
+# Au (part xc7a35t) — default, proven PHY, C_BOARD=AU_V2, internal counter
+cd platforms/alchitry-au-v2
 vivado -mode batch -source tcl/pvla_bd_example.tcl
 
-# Au (part xc7a35t) — proven PHY, C_BOARD=AU_V2, counter source
-cd platforms/alchitry-au-v2
+# Pt (part xc7a100t)
+cd platforms/alchitry-platinum-v2
 vivado -mode batch -source tcl/pvla_bd_example.tcl
 ```
 
@@ -98,6 +108,7 @@ Wrapper target name `pvla_bd_wrapper`. Do not program QSPI flash.
 ## Check (no Vivado)
 
 ```bash
+python3 ip/pvla/scripts/tb_pvla_word_packer.py
 python3 ip/pvla/scripts/check_pvla_ip.py
 ```
 

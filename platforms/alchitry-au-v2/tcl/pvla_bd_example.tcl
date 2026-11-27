@@ -7,7 +7,7 @@
 #   vivado -mode batch -source tcl/pvla_bd_example.tcl
 #
 # Optional before sourcing:
-#   set pvla_num_ch    8
+#   set pvla_num_ch    8          ;# 4, 8, or 16
 #   set pvla_phy       0
 #   set pvla_has_axi   0
 #   set skip_wrapper   0
@@ -17,8 +17,8 @@ if {![info exists pvla_phy]}     { set pvla_phy     0 }
 if {![info exists pvla_has_axi]} { set pvla_has_axi 0 }
 set pvla_board 2
 
-if {$pvla_num_ch < 1 || $pvla_num_ch > 8} {
-  error "pvla_num_ch must be 1-8 (got $pvla_num_ch)"
+if {$pvla_num_ch != 4 && $pvla_num_ch != 8 && $pvla_num_ch != 16} {
+  error "pvla_num_ch must be 4, 8, or 16 (got $pvla_num_ch)"
 }
 
 set script_dir  [file dirname [file normalize [info script]]]
@@ -44,7 +44,11 @@ create_bd_design pvla_bd
 create_bd_cell -type ip -vlnv greg676:user:pvla:1.0 pvla_0
 set_property -dict [list \
   CONFIG.C_NUM_CH          $pvla_num_ch \
-  CONFIG.C_SAMPLE_MHZ      {100} \
+  CONFIG.C_SAMPLE_MHZ      {200} \
+  CONFIG.C_SAMPLE_DIV      {1} \
+  CONFIG.C_SAMPLE_CLK_SRC  {0} \
+  CONFIG.C_INPUT_PATH      {0} \
+  CONFIG.C_PAD_MODE        {0} \
   CONFIG.C_PRETRIG_SAMPLES {4096} \
   CONFIG.C_PHY             $pvla_phy \
   CONFIG.C_BOARD           $pvla_board \
