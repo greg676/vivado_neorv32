@@ -33,6 +33,7 @@ add_files -fileset sources_1 [list \
     ./rtl/ft601/ft601_sync_fifo.v \
     ./rtl/ft601/ft601_reset.v \
     ./rtl/la/la_pattern.v \
+    ./rtl/la/la_fifo36_fwft.v \
     ./rtl/la/la_pingpong_bram.v \
     ./rtl/la/la_capture_core.v \
     ./rtl/la/la_capture_top.v \

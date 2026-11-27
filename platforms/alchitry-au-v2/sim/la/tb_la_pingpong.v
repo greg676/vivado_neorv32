@@ -115,9 +115,28 @@ module tb_la_pingpong;
         end
         $display("dump both banks: words 0..2047 OK");
 
+        // Fill continued during the dump (no drain-to-empty). Pause the
+        // writer and empty the FIFO so the TXE-gap stream starts with slack.
+        wr_valid <= 1'b0;
+        while (tx_valid) begin
+            @(posedge clk);
+            if (tx_valid && tx_ready) begin
+                if (tx_data !== next_exp) begin
+                    if (errors < 16)
+                        $display("FAIL drain-empty got=0x%08x exp=0x%08x",
+                                 tx_data, next_exp);
+                    errors = errors + 1;
+                end
+                next_exp = next_exp + 32'd1;
+            end
+        end
+        wr_valid <= 1'b1;
+        @(posedge clk);
+
         // 3. Streaming with TXE gaps: 1024 ready, 32 stall, repeat.
-        //    Sampler must keep filling the other bank (wr_ready stays 1
-        //    through the 32-cycle TXE-high window).
+        //    Start from empty so used stays off the high-water mark.
+        //    Sampler must keep filling (wr_ready stays 1) through the
+        //    32-cycle TXE-high window.
         dumped = 0;
         gaps = 0;
         stalled = 0;

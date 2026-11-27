@@ -20,8 +20,10 @@ make d3xx D3XX_DIR=$HOME/ft601-host/d3xx/unpack/linux-arm-v8
 # TX-only: overlapped FT_ReadPipeAsync, 256 KiB x 4 in flight (try 1 MiB too)
 ./ft601_loopback_d3xx --tx-only --bytes 16777216 --chunk-bytes 262144 --nflight 4
 ./ft601_loopback_d3xx --tx-only --bytes 16777216 --chunk-bytes 1048576 --nflight 4
-# Dual-BRAM packed counter:
+# Dual-FIFO36 packed counter (must match TX-only rate):
 ./ft601_loopback_d3xx --packed-counter --bytes 16777216 --chunk-bytes 262144 --nflight 4
+./ft601_loopback_d3xx --packed-counter --bytes 268435456 --chunk-bytes 1048576 --nflight 8
+./ft601_loopback_d3xx --packed-counter --sink --bytes 268435456 --chunk-bytes 1048576 --nflight 8
 # A/B vs old 16 KiB one-shot:
 ./ft601_loopback_d3xx --tx-only --bytes 16777216 --no-stream
 ```

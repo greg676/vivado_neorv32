@@ -489,14 +489,11 @@ int main(int argc, char **argv)
         fprintf(stderr, "FAIL: incomplete transfer\n");
         return 1;
     }
-    if (!packed_counter && vs.words_bad != 0) {
-        fprintf(stderr, "FAIL: loopback mismatch or incomplete transfer\n");
+    if (vs.words_bad != 0) {
+        fprintf(stderr, "FAIL: loopback mismatch or packed-counter skip\n");
         return 1;
     }
-    if (packed_counter && vs.words_bad != 0)
-        printf("NOTE: packed-counter skips (rate is the host ceiling)\n");
-    else
-        printf("PASS\n");
+    printf("PASS\n");
     return 0;
 }
 

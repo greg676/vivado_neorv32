@@ -5,7 +5,9 @@
 // DATA-before-WR).
 //
 // Sampler enable is ping-pong wr_ready, not PHY tx_ready / TXE. TXE only
-// pauses the dump bank. Target: 4 bytes/clock @ 100 MHz ≈ 400 MB/s.
+// pauses the dump pop. Cascaded FIFO36 FWFT keeps tx_valid solid so
+// ST_WRITE does not drop mid-burst (TX-only cadence). Target: 4 bytes/clock
+// @ 100 MHz ≈ 400 MB/s.
 module la_capture_core #(
     parameter [1:0] SOURCE = 2'd0
 ) (
