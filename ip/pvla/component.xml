@@ -681,6 +681,10 @@
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
+        <spirit:name>../../platforms/alchitry-au-v2/rtl/la/la_pingpong_bram.v</spirit:name>
+        <spirit:fileType>verilogSource</spirit:fileType>
+      </spirit:file>
+      <spirit:file>
         <spirit:name>hdl/pvla_axi_lite.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>

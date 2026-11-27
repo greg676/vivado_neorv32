@@ -262,7 +262,7 @@ def run_hw(args: argparse.Namespace) -> int:
             words, source, start_sample=start_sample
         )
 
-    print("mode        : la-capture (host IN, 4 KiB PHY bursts)")
+    print("mode        : la-capture (dual 4 KiB BRAM, 4 KiB PHY bursts)")
     print(f"first_8     : {fmt_first8(first_words)}")
     print(f"bytes       : {bytes_done}")
     print(f"samples     : {len(samples)}")

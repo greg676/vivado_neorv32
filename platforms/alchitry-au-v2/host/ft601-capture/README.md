@@ -1,7 +1,8 @@
 # FT601 LA capture (Alchitry Au V2 + Ft+)
 
-Host IN of packed 8-bit samples from `la_capture_top`. The FPGA uses the
-PR #18 PHY: Lucid DATA-before-WR, **4 KiB write bursts**, NEVER RD.
+Host IN of packed 8-bit samples from `la_capture_top`. Dual 4 KiB BRAM
+ping-pong sits in front of the PR #18 PHY (Lucid DATA-before-WR, **4 KiB
+write bursts**, NEVER RD) so the sampler does not stall on TXE.
 
 Each USB 32-bit word is four little-endian samples:
 
@@ -15,4 +16,6 @@ python3 ft601_capture.py --self-test
 # SRAM-load bitstreams/la_capture_top_v2.bit first (never --write-flash):
 python3 ft601_capture.py --backend d3xx --bytes 16384 --chunk-bytes 4096 \
     --sr /tmp/au-la-counter.sr --dump /tmp/au-la-counter.raw
+# 16 MiB D3XX IN throughput (prints MiB/s and words_ok):
+python3 ft601_capture.py --backend d3xx --bytes 16777216 --chunk-bytes 16384
 ```

@@ -40,9 +40,11 @@ openFPGALoader --fpga-part xc7a35tftg256 --write-sram bitstreams/ft601_loopback_
 python3 host/ft601-loopback/ft601_loopback.py --backend d3xx --bytes 16384 --chunk-bytes 4096
 ```
 
-## LA capture (pattern → 4 KiB TX bursts → PulseView `.sr`)
+## LA capture (dual 4 KiB BRAM → PR #18 PHY → PulseView `.sr`)
 
-Dedicated top, same PHY. Host IN only. Writes a sigrok v2 `.sr` (keep zips out of Project `docs/`).
+Dedicated top. Two 4 KiB BRAM banks sit in front of the PHY so the sampler
+never stalls on TXE. Host IN only. Writes a sigrok v2 `.sr` (keep zips out of
+Project `docs/`). Target is 32-bit @ 100 MHz ≈ 400 MB/s.
 
 ```bash
 vivado -mode batch -source tcl/rebuild_la_capture.tcl
@@ -50,6 +52,8 @@ vivado -mode batch -source tcl/rebuild_la_capture.tcl
 openFPGALoader --fpga-part xc7a35tftg256 --write-sram bitstreams/la_capture_top_v2.bit
 python3 host/ft601-capture/ft601_capture.py --backend d3xx --bytes 16384 --chunk-bytes 4096 \
     --sr /tmp/au-la-counter.sr
+# Throughput (Jetson D3XX IN). Report MiB/s and words_ok.
+python3 host/ft601-capture/ft601_capture.py --backend d3xx --bytes 16777216 --chunk-bytes 16384
 ```
 
 ## PVLA catalog IP (Block Design)

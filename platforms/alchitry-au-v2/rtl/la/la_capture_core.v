@@ -1,7 +1,11 @@
 `timescale 1ns / 1ps
-// Stream packed 8-bit LA samples through the PR #18 FT601 PHY.
-// NEVER RD: host IN only. ALWAYS_DRIVE so the 4 KiB write bursts stay
-// on the proven TX_ONLY pad path (OBUF, Lucid DATA-before-WR).
+// Stream packed 8-bit LA samples through two 4 KiB BRAM banks, then the
+// PR #18 FT601 PHY. NEVER RD: host IN only. ALWAYS_DRIVE so the 4 KiB
+// write bursts stay on the proven TX_ONLY pad path (OBUF, Lucid
+// DATA-before-WR).
+//
+// Sampler enable is ping-pong wr_ready, not PHY tx_ready / TXE. TXE only
+// pauses the dump bank. Target: 4 bytes/clock @ 100 MHz ≈ 400 MB/s.
 module la_capture_core #(
     parameter [1:0] SOURCE = 2'd0
 ) (
@@ -23,32 +27,53 @@ module la_capture_core #(
 );
 
     wire [7:0]  s0, s1, s2, s3;
+    wire [31:0] samp_word;
+    wire        wr_ready;
     wire [31:0] tx_data;
+    wire        tx_valid;
     wire        tx_ready;
+    wire        dump_active;
     wire [31:0] rx_data;
     wire [3:0]  rx_be;
     wire        rx_valid;
 
-    assign source_sel      = SOURCE;
-    assign overflow_sticky = 1'b0;
-    assign fifo_empty      = 1'b1;
-    assign tx_active       = tx_ready;
-    assign tx_data         = {s3, s2, s1, s0};
+    assign source_sel = SOURCE;
+    assign samp_word  = {s3, s2, s1, s0};
+    assign fifo_empty = ~tx_valid;
+    assign tx_active  = dump_active;
 
     la_pattern #(
         .SOURCE (SOURCE)
     ) u_pat (
         .clk    (ft_clk),
         .rst    (rst),
-        .enable (tx_ready),
+        .enable (wr_ready),
         .s0     (s0),
         .s1     (s1),
         .s2     (s2),
         .s3     (s3)
     );
 
+    la_pingpong_bram #(
+        .WORDS (1024)
+    ) u_pp (
+        .clk             (ft_clk),
+        .rst             (rst),
+        .wr_data         (samp_word),
+        .wr_valid        (1'b1),
+        .wr_ready        (wr_ready),
+        .tx_data         (tx_data),
+        .tx_valid        (tx_valid),
+        .tx_last         (),
+        .tx_ready        (tx_ready),
+        .overflow_sticky (overflow_sticky),
+        .dump_active     (dump_active),
+        .banks_full      ()
+    );
+
     ft601_sync_fifo #(
-        .ALWAYS_DRIVE (1)
+        .ALWAYS_DRIVE   (1),
+        .TX_BURST_WORDS (1024)
     ) u_phy (
         .ft_clk   (ft_clk),
         .rst      (rst),
@@ -65,7 +90,7 @@ module la_capture_core #(
         .rx_ready (1'b0),
         .tx_data  (tx_data),
         .tx_be    (4'hF),
-        .tx_valid (1'b1),
+        .tx_valid (tx_valid),
         .tx_ready (tx_ready)
     );
 
