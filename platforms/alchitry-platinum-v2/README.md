@@ -114,4 +114,14 @@ Full details: [Wiki → Gotchas](../../wiki/Gotchas)
 
 **Active.** Bitstream v0.29, firmware debug-console rev0. MCP server v3 tested against live hardware.
 
+## PVLA catalog IP
+
+PulseView logic analyzer as a BD block (`greg676:user:pvla:1.0`). PHY is the Lucid WR / 4 KiB burst core from the Au stack — not a NeoRV32 rewrite, not MIG.
+
+```bash
+# Settings → IP → Repository → <repo>/ip
+cd platforms/alchitry-platinum-v2
+vivado -mode batch -source tcl/pvla_bd_example.tcl
+```
+
 MIT License

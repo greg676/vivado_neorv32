@@ -15,6 +15,10 @@ webtalk*.txt
 usage_statistics_webtalk.*
 vivado_pid*.str
 
+# PVLA packager / example BD work dirs
+ip/pvla/work/
+**/vivado_project_pvla_bd/
+
 # Vivado IP temp
 *.srcs/*/bd/*/hdl/
 *.srcs/*/bd/*/sim/
