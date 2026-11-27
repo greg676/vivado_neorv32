@@ -116,12 +116,25 @@ Full details: [Wiki → Gotchas](../../wiki/Gotchas)
 
 ## PVLA catalog IP
 
-PulseView logic analyzer as a BD block (`greg676:user:pvla:1.0`). PHY is the Lucid WR / 4 KiB burst core from the Au stack — not a NeoRV32 rewrite, not MIG.
+PulseView logic analyzer as a BD block (`greg676:user:pvla:1.0`). PHY is the Lucid WR / 4 KiB burst core from the Au stack — not a NeoRV32 rewrite. The catalog IP itself stays BRAM + FT601 (Au has no DDR).
 
 ```bash
 # Settings → IP → Repository → <repo>/ip
 cd platforms/alchitry-platinum-v2
 vivado -mode batch -source tcl/pvla_bd_example.tcl
+```
+
+## PVLA + MIG7 256 MB (separate top, Pt only)
+
+Large capture buffer on the onboard DDR3. Does **not** replace the 4 KiB FT601 PHY: samples go MIG7 (256 MB @ `0x20000000`, same pinout as `neorv_basic_plus`) → dual 4 KiB BRAM ping-pong → Lucid WR PHY. No NeoRV32 (fabric AXI master). No QSPI — RAM program only. Au V2 has no DDR; do not build this for xc7a35t.
+
+```bash
+cd platforms/alchitry-platinum-v2
+python3 scripts/check_pvla_mig7.py
+make -C sim/la test
+# gj-007 with Vivado, after copying mig_b.prj (see mig/README.md):
+vivado -mode batch -source tcl/pvla_mig7_bd.tcl
+vivado -mode batch -source tcl/rebuild_pvla_mig7.tcl
 ```
 
 MIT License

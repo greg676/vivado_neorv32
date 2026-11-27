@@ -4,7 +4,9 @@ Catalog IP for the PulseView logic analyzer. Same packaging pattern as the NEORV
 
 **VLNV:** `greg676:user:pvla:1.0`
 
-PHY is the **PR #18/#19** Lucid DATA-before-WR core with **4 KiB write bursts** and `ALWAYS_DRIVE` (`platforms/alchitry-au-v2/rtl/ft601/`). Not the old echo that starved WR. NeoRV32 is not rewritten. No MIG.
+PHY is the **PR #18/#19** Lucid DATA-before-WR core with **4 KiB write bursts** and `ALWAYS_DRIVE` (`platforms/alchitry-au-v2/rtl/ft601/`). Not the old echo that starved WR. NeoRV32 is not rewritten. This IP does not instantiate MIG.
+
+Au = BRAM/SRAM + 4 KiB PHY (this IP). Pt large buffer is a **separate top** (`platforms/alchitry-platinum-v2/rtl/la/pvla_mig7_top.v`): MIG7 256 MB @ `0x20000000` plus the same 4 KiB PHY. Do not put MIG inside this IP. RAM program only (no QSPI). Au has no DDR.
 
 ## Add to a project
 
