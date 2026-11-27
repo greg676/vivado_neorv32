@@ -7,7 +7,8 @@
 //
 // BE at the PHY is 4'hF. Every DATA bit is a packed sample bit
 // (4 ch uses [31:28] as sample t+7, not "unused").
-// Each mode is its own generate so the schematic shows the mux/shift.
+// One width per instance so the mux/shift is readable. Capture keeps
+// u_pack4, u_pack8, and u_pack16 all live and muxes by C_NUM_CH.
 module pvla_word_packer #(
     parameter integer C_NUM_CH = 8
 ) (

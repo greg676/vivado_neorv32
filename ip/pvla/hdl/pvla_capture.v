@@ -1,5 +1,7 @@
 `timescale 1ns / 1ps
-// PVLA capture: visible 4/8/16 packer -> 4 KiB ping-pong -> Lucid WR PHY.
+// PVLA capture: all three packers live (4/8/16), mux by width, then
+// 4 KiB ping-pong -> Lucid WR PHY. MMCM 400/200/100 clocks the nibble /
+// byte / halfword shifters.
 //
 // C_PHY=0 FT601  — ft601_sync_fifo, TX_BURST_WORDS=1024, rx_ready=0
 //                  C_PAD_MODE 0 = IOBUF 245 (default)  1 = ALWAYS_DRIVE
@@ -27,6 +29,10 @@ module pvla_capture #(
     input  wire                  cap_rst,
     input  wire                  samp_clk,
     input  wire                  samp_rst,
+    input  wire                  clk100,
+    input  wire                  clk200,
+    input  wire                  clk400,
+    input  wire                  mmcm_locked,
 
     input  wire [C_NUM_CH-1:0]   probe_i,
 
@@ -69,7 +75,7 @@ module pvla_capture #(
 
     (* keep = "true" *) wire unused_cfg =
         (C_SAMPLE_MHZ != 0) ^ (C_PRETRIG_SAMPLES != 0) ^ (C_DEFAULT_POST != 0)
-        ^ (C_SAMPLE_CLK_SRC != 0) ^ (C_PAD_MODE != 0);
+        ^ (C_SAMPLE_CLK_SRC != 0) ^ (C_PAD_MODE != 0) ^ (mmcm_locked != 0);
 
     // ── command / source (sample domain) ─────────────────────────
     // C_INPUT_PATH=1 (external) forces probe pins; never mix with pattern.
@@ -166,25 +172,98 @@ module pvla_capture #(
     wire [C_NUM_CH-1:0] sample_w = (int_valid) ? int_sample : probe_r;
     wire                sample_v = int_valid | probe_v;
 
-    // ── packer (sample domain) ───────────────────────────────────
-    wire [31:0] packed_word;
-    wire        packed_valid;
-    wire        packed_ready;
-    wire        pack_ready;
+    // ── three packers always live; mux by C_NUM_CH ────────────────
+    // 4ch clocks a nibble into the 32-bit shift @ 400 MHz.
+    // 8ch clocks a byte  @ 200 MHz. 16ch clocks a halfword @ 100 MHz.
+    // External sample_clk (C_SAMPLE_CLK_SRC=1) drives all three.
+    wire p4_clk  = (C_SAMPLE_CLK_SRC != 0) ? samp_clk : clk400;
+    wire p8_clk  = (C_SAMPLE_CLK_SRC != 0) ? samp_clk : clk200;
+    wire p16_clk = (C_SAMPLE_CLK_SRC != 0) ? samp_clk : clk100;
 
-    pvla_word_packer #(
-        .C_NUM_CH (C_NUM_CH)
-    ) u_pack (
-        .clk          (samp_clk),
-        .rst          (samp_rst),
-        .arm          (armed_r),
-        .sample_i     (sample_w),
+    (* ASYNC_REG = "TRUE" *) reg [1:0] lock4, lock8, lock16;
+    always @(posedge p4_clk)  lock4  <= {lock4[0],  mmcm_locked};
+    always @(posedge p8_clk)  lock8  <= {lock8[0],  mmcm_locked};
+    always @(posedge p16_clk) lock16 <= {lock16[0], mmcm_locked};
+    wire rst4  = (C_NUM_CH == 4)  ? (samp_rst | ~lock4[1])  : ~lock4[1];
+    wire rst8  = (C_NUM_CH == 8)  ? (samp_rst | ~lock8[1])  : ~lock8[1];
+    wire rst16 = (C_NUM_CH == 16) ? (samp_rst | ~lock16[1]) : ~lock16[1];
+
+    wire [15:0] sample16;
+    generate
+        if (C_NUM_CH >= 16) begin : g_s16
+            assign sample16 = sample_w;
+        end else begin : g_spad
+            assign sample16 = {{(16 - C_NUM_CH){1'b0}}, sample_w};
+        end
+    endgenerate
+
+    wire        packed_ready;
+    wire        pack4_ready, pack8_ready, pack16_ready;
+    (* keep = "true" *) wire [31:0] pack4_word, pack8_word, pack16_word;
+    wire        pack4_valid, pack8_valid, pack16_valid;
+
+    (* DONT_TOUCH = "TRUE", keep_hierarchy = "yes" *)
+    pvla_word_packer #(.C_NUM_CH(4)) u_pack4 (
+        .clk          (p4_clk),
+        .rst          (rst4),
+        .arm          (armed_r && (C_NUM_CH == 4)),
+        .sample_i     (sample16[3:0]),
         .sample_valid (sample_v),
-        .sample_ready (pack_ready),
-        .word_o       (packed_word),
-        .word_valid   (packed_valid),
+        .sample_ready (pack4_ready),
+        .word_o       (pack4_word),
+        .word_valid   (pack4_valid),
         .word_ready   (packed_ready)
     );
+
+    (* DONT_TOUCH = "TRUE", keep_hierarchy = "yes" *)
+    pvla_word_packer #(.C_NUM_CH(8)) u_pack8 (
+        .clk          (p8_clk),
+        .rst          (rst8),
+        .arm          (armed_r && (C_NUM_CH == 8)),
+        .sample_i     (sample16[7:0]),
+        .sample_valid (sample_v),
+        .sample_ready (pack8_ready),
+        .word_o       (pack8_word),
+        .word_valid   (pack8_valid),
+        .word_ready   (packed_ready)
+    );
+
+    (* DONT_TOUCH = "TRUE", keep_hierarchy = "yes" *)
+    pvla_word_packer #(.C_NUM_CH(16)) u_pack16 (
+        .clk          (p16_clk),
+        .rst          (rst16),
+        .arm          (armed_r && (C_NUM_CH == 16)),
+        .sample_i     (sample16[15:0]),
+        .sample_valid (sample_v),
+        .sample_ready (pack16_ready),
+        .word_o       (pack16_word),
+        .word_valid   (pack16_valid),
+        .word_ready   (packed_ready)
+    );
+
+    // Width case: one USB word from the selected packer. Others stay idle.
+    reg [31:0] packed_word;
+    reg        packed_valid;
+    reg        pack_ready;
+    always @(*) begin
+        case (C_NUM_CH)
+            4: begin
+                packed_word  = pack4_word;
+                packed_valid = pack4_valid;
+                pack_ready   = pack4_ready;
+            end
+            16: begin
+                packed_word  = pack16_word;
+                packed_valid = pack16_valid;
+                pack_ready   = pack16_ready;
+            end
+            default: begin
+                packed_word  = pack8_word;
+                packed_valid = pack8_valid;
+                pack_ready   = pack8_ready;
+            end
+        endcase
+    end
 
     // ── 4 KiB ping-pong: write samp_clk, dump cap_clk ────────────
     (* ram_style = "block" *) reg [31:0] burst_mem [0:2047];

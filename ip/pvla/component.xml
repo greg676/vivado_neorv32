@@ -684,7 +684,7 @@
     </spirit:choice>
     <spirit:choice>
       <spirit:name>choice_list_clksrc</spirit:name>
-      <spirit:enumeration spirit:text="FT601 100 MHz">0</spirit:enumeration>
+      <spirit:enumeration spirit:text="MMCM from ft_clk (400/200/100)">0</spirit:enumeration>
       <spirit:enumeration spirit:text="External sample_clk">1</spirit:enumeration>
     </spirit:choice>
     <spirit:choice>
@@ -727,6 +727,10 @@
       </spirit:file>
       <spirit:file>
         <spirit:name>hdl/pvla_word_packer.v</spirit:name>
+        <spirit:fileType>verilogSource</spirit:fileType>
+      </spirit:file>
+      <spirit:file>
+        <spirit:name>hdl/pvla_clk_wiz.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
@@ -889,7 +893,7 @@
       </xilinx:taxonomies>
       <xilinx:displayName>PVLA</xilinx:displayName>
       <xilinx:vendorDisplayName>greg676</xilinx:vendorDisplayName>
-      <xilinx:coreRevision>4</xilinx:coreRevision>
+      <xilinx:coreRevision>5</xilinx:coreRevision>
       <xilinx:upgrades>
         <xilinx:canUpgradeFrom>greg676:user:pvla:1.0</xilinx:canUpgradeFrom>
       </xilinx:upgrades>

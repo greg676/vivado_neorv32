@@ -33,6 +33,7 @@ set file_list [list \
   [file join $au rtl/ft601/ft601_sync_fifo.v] \
   [file join $au rtl/ft601/ft601_reset.v] \
   [file join $ip_dir hdl/pvla_word_packer.v] \
+  [file join $ip_dir hdl/pvla_clk_wiz.v] \
   [file join $ip_dir hdl/pvla_internal_src.v] \
   [file join $ip_dir hdl/pvla_axi_lite.v] \
   [file join $ip_dir hdl/pvla_capture.v] \
@@ -140,7 +141,7 @@ set_property value_validation_type pairs [ipx::get_user_parameters C_SAMPLE_DIV 
 set_property value_validation_pairs {{1 (50 Mword/s USB)} 1 {2} 2 {4} 4 {8} 8} [ipx::get_user_parameters C_SAMPLE_DIV -of_objects [ipx::current_core]]
 
 set_property value_validation_type pairs [ipx::get_user_parameters C_SAMPLE_CLK_SRC -of_objects [ipx::current_core]]
-set_property value_validation_pairs {{FT601 100 MHz} 0 {External sample_clk} 1} [ipx::get_user_parameters C_SAMPLE_CLK_SRC -of_objects [ipx::current_core]]
+set_property value_validation_pairs {{MMCM from ft_clk (400/200/100)} 0 {External sample_clk} 1} [ipx::get_user_parameters C_SAMPLE_CLK_SRC -of_objects [ipx::current_core]]
 
 set_property value_validation_type pairs [ipx::get_user_parameters C_INPUT_PATH -of_objects [ipx::current_core]]
 set_property value_validation_pairs {{Internal fabric} 0 {External pins} 1} [ipx::get_user_parameters C_INPUT_PATH -of_objects [ipx::current_core]]
@@ -224,7 +225,7 @@ proc setup_ip_gui {} {
 
   set page [ipgui::add_page -name {General} -component [ipx::current_core] -display_name {General}]
   ipgui::add_static_text -name {About} -component [ipx::current_core] -parent $page \
-    -text {PVLA packs 4/8/16 channels into 32-bit FT601 USB words. Safe advertised rates: 400/200/100 MS/s (4/8/16 ch) = 50 Mword/s USB. Not 800/400/200. Default: Au V2, internal counter, IOBUF 245, TX-only host IN. 4 KiB WR-after-TXE. No DDR3. No NeoRV32.}
+    -text {PVLA packs 4/8/16 channels into 32-bit FT601 USB words. All three packers exist; mux by width. MMCM from ft_clk: 400/200/100 MHz for 4/8/16 ch = 50 Mword/s USB. Not 800/400/200. Default: Au V2, internal counter, IOBUF 245, TX-only host IN. 4 KiB WR-after-TXE. No DDR3. No NeoRV32.}
 
   set g [ipgui::add_group -name {Capture} -component [ipx::current_core] -parent $page -display_name {Capture}]
   foreach n {C_NUM_CH C_INPUT_PATH C_DEFAULT_SOURCE C_PRETRIG_SAMPLES C_DEFAULT_POST} {
@@ -241,8 +242,8 @@ proc setup_ip_gui {} {
     ipgui::add_param -name $n -component [ipx::current_core] -parent $g
   }
   ipgui::add_static_text -name {RateMath} -component [ipx::current_core] -parent $g \
-    -text {C_SAMPLE_MHZ follows C_NUM_CH: 4ch=400, 8ch=200, 16ch=100. usb_Mword/s = C_SAMPLE_MHZ / (32/C_NUM_CH) / C_SAMPLE_DIV. Default div=1 -> 50 Mword/s USB. Not 800/400/200 (100 Mword/s bench fill).}
-  set_param_properties C_SAMPLE_CLK_SRC {Sample clock} {FT601 100 MHz ft_clk or external sample_clk.}
+    -text {MMCM from ft_clk: 400/200/100 MHz for 4/8/16 ch. usb_Mword/s = C_SAMPLE_MHZ / (32/C_NUM_CH) / C_SAMPLE_DIV. Default div=1 -> 50 Mword/s USB. Not 800/400/200 (100 Mword/s bench fill). All three packers exist; mux by C_NUM_CH.}
+  set_param_properties C_SAMPLE_CLK_SRC {Sample clock} {MMCM from ft_clk (400/200/100 MHz for 4/8/16 ch) or external sample_clk.}
   set_param_properties C_SAMPLE_MHZ {Advertised sample rate} {Safe set: 400/200/100 MS/s for 4/8/16 ch = 50 Mword/s USB. Not 800/400/200.} {} {$C_NUM_CH == 4 ? 400 : ($C_NUM_CH == 16 ? 100 : 200)}
   set_param_properties C_SAMPLE_DIV {Sample divider} {Extra 1/2/4/8 from the advertised rate. Default 1 keeps 50 Mword/s USB.}
 

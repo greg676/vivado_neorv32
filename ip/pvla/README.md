@@ -24,7 +24,7 @@ FT601 pads are I/O of the IP so an IP-scoped XDC can bind package pins (the MIG 
 | **8** (default) | 4 | `[7:0]=t+0` … `[31:24]=t+3` |
 | 16 | 2 | `[15:0]=t+0` … `[31:16]=t+1` |
 
-RTL: `hdl/pvla_word_packer.v` (generate mux/shift, not hidden in the PHY).
+RTL: `hdl/pvla_word_packer.v` — capture instantiates **u_pack4, u_pack8, and u_pack16** (all live) and muxes by `C_NUM_CH`. MMCM (`hdl/pvla_clk_wiz.v`) from `ft_clk` makes **400 / 200 / 100 MHz** for 4 / 8 / 16 ch.
 
 ## GUI parameters
 
@@ -33,7 +33,7 @@ RTL: `hdl/pvla_word_packer.v` (generate mux/shift, not hidden in the PHY).
 | `C_NUM_CH` | **8** | 4 / 8 / 16 packing mode; resizes `probe_i` |
 | `C_INPUT_PATH` | Internal | Internal fabric **or** external pins (not mixed) |
 | `C_DEFAULT_SOURCE` | Counter | Counter / walking-one / BD `probe_i` (internal path only) |
-| `C_SAMPLE_CLK_SRC` | FT601 100 MHz | `ft_clk` or external `sample_clk` |
+| `C_SAMPLE_CLK_SRC` | MMCM from ft_clk | 400/200/100 MHz for 4/8/16 ch, or external `sample_clk` |
 | `C_SAMPLE_MHZ` | **200** (8 ch) | Advertised MS/s: **400 / 200 / 100** for 4 / 8 / 16 ch (50 Mword/s USB). Not 800/400/200. |
 | `C_SAMPLE_DIV` | 1 | Extra 1 / 2 / 4 / 8. Default 1 keeps 50 Mword/s USB |
 | `C_PAD_MODE` | IOBUF 245 | IOBUF (default) or ALWAYS_DRIVE |
@@ -77,7 +77,8 @@ Rate math: `usb_Mword/s = C_SAMPLE_MHZ / (32 / C_NUM_CH) / C_SAMPLE_DIV`. Advert
 
 | Path | Role |
 |---|---|
-| `hdl/pvla_word_packer.v` | Visible 4/8/16 → 32-bit USB word |
+| `hdl/pvla_word_packer.v` | One width's mux/shift; capture instantiates all three |
+| `hdl/pvla_clk_wiz.v` | MMCME2_BASE: ft_clk 100 → 100/200/400 MHz |
 | `hdl/pvla_internal_src.v` | Counter / walking-one / probe mux |
 | `hdl/pvla.v` | IP top |
 | `hdl/pvla_capture.v` | Packer + 4 KiB ping-pong + PHY |

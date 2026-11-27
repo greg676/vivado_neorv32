@@ -2,6 +2,7 @@
 // PVLA — PulseView logic analyzer, packaged as a Vivado catalog IP.
 //
 // Educational 4/8/16-channel packer: N samples fill one 32-bit USB word.
+// All three packers live; MMCM 400/200/100 MHz for 4/8/16 ch.
 // Au V2 + Ft+ FT601 first. SRAM/BRAM only. No DDR3, no QSPI, no NeoRV32.
 //
 // C_PHY        0 = FT601 (default)   1 = STREAM (m_axis_* for another PHY)
@@ -81,7 +82,31 @@ module pvla #(
     (* keep = "true" *) wire unused_cfg = (C_BOARD != 0) ^ (C_INCLUDE_BR_XDC != 0);
 
     wire phy_clk = (C_PHY == 0) ? ft_clk : sample_clk;
-    wire samp_clk = (C_SAMPLE_CLK_SRC != 0) ? sample_clk : phy_clk;
+    wire clk100, clk200, clk400, mmcm_locked;
+
+    // Clocking Wizard / MMCM: 100/200/400 MHz for 16/8/4 ch. All three
+    // outputs exist. Selected rate follows C_NUM_CH (advertised MS/s).
+    generate
+        if (C_PHY == 0) begin : g_clk_wiz
+            pvla_clk_wiz u_clk_wiz (
+                .clk_in (ft_clk),
+                .rst    (~rst_n),
+                .clk100 (clk100),
+                .clk200 (clk200),
+                .clk400 (clk400),
+                .locked (mmcm_locked)
+            );
+        end else begin : g_no_mmcm
+            assign clk100      = sample_clk;
+            assign clk200      = sample_clk;
+            assign clk400      = sample_clk;
+            assign mmcm_locked = 1'b1;
+        end
+    endgenerate
+
+    wire samp_clk_mmcm = (C_NUM_CH == 4)  ? clk400 :
+                         (C_NUM_CH == 16) ? clk100 : clk200;
+    wire samp_clk = (C_SAMPLE_CLK_SRC != 0) ? sample_clk : samp_clk_mmcm;
     wire cap_rst;
     wire samp_rst;
     wire rst_ft;
@@ -109,7 +134,8 @@ module pvla #(
         end
     endgenerate
 
-    assign samp_rst = (C_SAMPLE_CLK_SRC != 0) ? ~sample_rst_n : cap_rst;
+    assign samp_rst = (C_SAMPLE_CLK_SRC != 0) ? ~sample_rst_n
+                                             : (cap_rst | ~mmcm_locked);
 
     wire        cmd_valid;
     wire [31:0] cmd_data;
@@ -191,6 +217,10 @@ module pvla #(
         .cap_rst         (cap_rst),
         .samp_clk        (samp_clk),
         .samp_rst        (samp_rst),
+        .clk100          (clk100),
+        .clk200          (clk200),
+        .clk400          (clk400),
+        .mmcm_locked     (mmcm_locked),
         .probe_i         (probe_i),
         .cmd_valid       (cmd_valid),
         .cmd_data        (cmd_data),

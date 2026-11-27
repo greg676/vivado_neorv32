@@ -6,7 +6,7 @@ proc init_gui { IPINST } {
 
   set page [ipgui::add_page $IPINST -name "General" -display_name {General}]
   ipgui::add_static_text $IPINST -name About -parent $page \
-    -text {PVLA packs 4/8/16 channels into 32-bit FT601 USB words (N samples/word). Safe advertised rates: 400/200/100 MS/s (4/8/16 ch) = 50 Mword/s USB. Not 800/400/200 (one word per ft_clk). Default: Au V2, internal counter, IOBUF 245, TX-only host IN. 4 KiB WR-after-TXE. No DDR3. No NeoRV32.}
+    -text {PVLA packs 4/8/16 channels into 32-bit FT601 USB words (N samples/word). All three packers exist; mux by width. MMCM from ft_clk: 400/200/100 MHz for 4/8/16 ch = 50 Mword/s USB. Not 800/400/200. Default: Au V2, internal counter, IOBUF 245, TX-only host IN. 4 KiB WR-after-TXE. No DDR3. No NeoRV32.}
 
   set ch [ipgui::add_group $IPINST -name {Capture} -parent $page -display_name {Capture}]
   ipgui::add_param $IPINST -name "C_NUM_CH" -parent $ch
@@ -20,7 +20,7 @@ proc init_gui { IPINST } {
   ipgui::add_param $IPINST -name "C_SAMPLE_MHZ" -parent $clk
   ipgui::add_param $IPINST -name "C_SAMPLE_DIV" -parent $clk
   ipgui::add_static_text $IPINST -name RateMath -parent $clk \
-    -text {Advertised C_SAMPLE_MHZ follows C_NUM_CH: 4ch=400, 8ch=200, 16ch=100 MS/s. usb_Mword/s = C_SAMPLE_MHZ / (32/C_NUM_CH) / C_SAMPLE_DIV. Default div=1 -> 50 Mword/s USB. Do not advertise 800/400/200 (100 Mword/s bench fill).}
+    -text {MMCM from ft_clk: 400/200/100 MHz clocks the 4/8/16 packers. usb_Mword/s = C_SAMPLE_MHZ / (32/C_NUM_CH) / C_SAMPLE_DIV. Default div=1 -> 50 Mword/s USB. Do not advertise 800/400/200 (100 Mword/s bench fill).}
 
   set phy [ipgui::add_group $IPINST -name {PHY} -parent $page -display_name {PHY and board}]
   ipgui::add_param $IPINST -name "C_PHY" -parent $phy
@@ -38,7 +38,7 @@ proc init_gui { IPINST } {
   set_property display_name {Internal source} [ipgui::get_guiparamspec -name C_DEFAULT_SOURCE -component $IPINST]
   set_property tooltip {Counter / walking-one / BD probe_i. Ignored when Input path = External.} [ipgui::get_guiparamspec -name C_DEFAULT_SOURCE -component $IPINST]
   set_property display_name {Sample clock} [ipgui::get_guiparamspec -name C_SAMPLE_CLK_SRC -component $IPINST]
-  set_property tooltip {FT601 100 MHz ft_clk (default) or an external sample_clk. Keep related unless you add an async FIFO.} [ipgui::get_guiparamspec -name C_SAMPLE_CLK_SRC -component $IPINST]
+  set_property tooltip {MMCM from ft_clk (400/200/100 MHz for 4/8/16 ch) or an external sample_clk. All three MMCM outputs exist.} [ipgui::get_guiparamspec -name C_SAMPLE_CLK_SRC -component $IPINST]
   set_property display_name {Advertised sample rate} [ipgui::get_guiparamspec -name C_SAMPLE_MHZ -component $IPINST]
   set_property tooltip {Safe set: 400/200/100 MS/s for 4/8/16 ch = 50 Mword/s USB. Tracks C_NUM_CH. Not 800/400/200 (one packed word per ft_clk).} [ipgui::get_guiparamspec -name C_SAMPLE_MHZ -component $IPINST]
   set_property display_name {Sample divider} [ipgui::get_guiparamspec -name C_SAMPLE_DIV -component $IPINST]

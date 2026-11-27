@@ -88,6 +88,7 @@ def main() -> int:
         "hdl/pvla_capture.v",
         "hdl/pvla_axi_lite.v",
         "hdl/pvla_word_packer.v",
+        "hdl/pvla_clk_wiz.v",
         "hdl/pvla_internal_src.v",
     ]
     xdc = [
@@ -147,6 +148,8 @@ def main() -> int:
         err("pvla.v must not instantiate MIG/DDR3")
     if re.search(r"\bneorv32\b", top_code, re.I):
         err("pvla.v must not instantiate NeoRV32")
+    if "pvla_clk_wiz" not in top:
+        err("pvla.v must instantiate the MMCM clocking wizard (pvla_clk_wiz)")
 
     packer = (IP / "hdl" / "pvla_word_packer.v").read_text()
     for token in (
@@ -158,13 +161,23 @@ def main() -> int:
     if "IDDR" in packer:
         err("simple packer must not use IDDR (SDR first cut)")
 
+    wiz = (IP / "hdl" / "pvla_clk_wiz.v").read_text()
+    for token in ("MMCME2_BASE", "clk100", "clk200", "clk400", "CLKIN1_PERIOD"):
+        if token not in wiz:
+            err(f"pvla_clk_wiz.v missing {token}")
+    if "neorv32" in wiz.lower():
+        err("pvla_clk_wiz.v must not touch NeoRV32")
+
     cap = (IP / "hdl" / "pvla_capture.v").read_text()
     if "C_PHY" not in cap or "ft601_sync_fifo" not in cap:
         err("pvla_capture.v must wrap FT601 PHY")
     if "m_axis_tdata" not in cap:
         err("pvla_capture.v missing STREAM master")
-    if "pvla_word_packer" not in cap:
-        err("pvla_capture.v must instantiate the visible word packer")
+    for inst in ("u_pack4", "u_pack8", "u_pack16"):
+        if inst not in cap:
+            err(f"pvla_capture.v must instantiate live {inst} (not generate-one-mode)")
+    if re.search(r"pvla_word_packer\s+#\(\s*\.C_NUM_CH\s*\(\s*C_NUM_CH\s*\)", cap):
+        err("pvla_capture.v must not generate-one-mode-only; mux u_pack4/8/16 by width")
     if ".ALWAYS_DRIVE   (C_PAD_MODE)" not in cap and "ALWAYS_DRIVE   (C_PAD_MODE)" not in cap:
         if "C_PAD_MODE" not in cap or "ALWAYS_DRIVE" not in cap:
             err("pvla_capture.v must pass C_PAD_MODE as PHY ALWAYS_DRIVE")
@@ -197,7 +210,7 @@ def main() -> int:
         "ftplus_ft601_au_v2.xdc",
         "xgui/pvla_v1_0.tcl", "SCOPED_TO_REF",
         "alchitry-au-v2/rtl/ft601/ft601_sync_fifo.v",
-        "hdl/pvla_word_packer.v", "hdl/pvla_internal_src.v",
+        "hdl/pvla_word_packer.v", "hdl/pvla_clk_wiz.v", "hdl/pvla_internal_src.v",
         "4 ch (8 samples/word)", "IOBUF 245",
         "400 MS/s (4ch)", "200 MS/s (8ch)", "100 MS/s (16ch)",
         "50 Mword/s USB",
@@ -215,7 +228,7 @@ def main() -> int:
     for token in (
         "C_NUM_CH", "C_PHY", "C_BOARD", "C_INPUT_PATH", "C_PAD_MODE",
         "C_SAMPLE_DIV", "C_SAMPLE_CLK_SRC", "init_gui", "usb_Mword",
-        "400/200/100", "50 Mword/s",
+        "400/200/100", "50 Mword/s", "MMCM",
     ):
         if token not in gui:
             err(f"xgui missing {token}")
@@ -231,6 +244,8 @@ def main() -> int:
         err("packager GUI must offer AU_V2 board pinout")
     if "pvla_word_packer.v" not in pkg:
         err("packager must include the visible word packer")
+    if "pvla_clk_wiz.v" not in pkg:
+        err("packager must include the MMCM clocking wizard wrapper")
     if "C_PAD_MODE" not in pkg:
         err("packager GUI must offer C_PAD_MODE (IOBUF vs ALWAYS_DRIVE)")
     if "400/200/100" not in pkg and "400 MS/s" not in pkg:
