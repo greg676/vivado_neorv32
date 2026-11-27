@@ -6,54 +6,87 @@ proc init_gui { IPINST } {
 
   set page [ipgui::add_page $IPINST -name "General" -display_name {General}]
   ipgui::add_static_text $IPINST -name About -parent $page \
-    -text {PVLA is a fabric logic analyzer that streams to PulseView/libsigrok. User designs keep MIG7/DDR. FT601 pins live in an Ft+ board XDC, not on the BD canvas. PHY is Lucid DATA-before-WR with 4 KiB write bursts (PR #18/#19), not the old echo.}
+    -text {PVLA packs 4/8/16 channels into 32-bit FT601 USB words (N samples/word). Default: Au V2, internal counter, IOBUF 245 pads, TX-only host IN. FT601 is 100 MHz 32-bit. Sample rate = C_SAMPLE_MHZ / C_SAMPLE_DIV. USB Mword/s = sample_MHz / (32/C_NUM_CH). 4 KiB WR-after-TXE ping-pong. No DDR3. No NeoRV32.}
 
   set ch [ipgui::add_group $IPINST -name {Capture} -parent $page -display_name {Capture}]
   ipgui::add_param $IPINST -name "C_NUM_CH" -parent $ch
-  ipgui::add_param $IPINST -name "C_SAMPLE_MHZ" -parent $ch
+  ipgui::add_param $IPINST -name "C_INPUT_PATH" -parent $ch
+  ipgui::add_param $IPINST -name "C_DEFAULT_SOURCE" -parent $ch
   ipgui::add_param $IPINST -name "C_PRETRIG_SAMPLES" -parent $ch
   ipgui::add_param $IPINST -name "C_DEFAULT_POST" -parent $ch
-  ipgui::add_param $IPINST -name "C_DEFAULT_SOURCE" -parent $ch
+
+  set clk [ipgui::add_group $IPINST -name {Clocks} -parent $page -display_name {Clocks vs FT601 100 MHz}]
+  ipgui::add_param $IPINST -name "C_SAMPLE_CLK_SRC" -parent $clk
+  ipgui::add_param $IPINST -name "C_SAMPLE_MHZ" -parent $clk
+  ipgui::add_param $IPINST -name "C_SAMPLE_DIV" -parent $clk
+  ipgui::add_static_text $IPINST -name RateMath -parent $clk \
+    -text {samples/word = 32/C_NUM_CH (4ch:8, 8ch:4, 16ch:2). usb_Mword/s = (C_SAMPLE_MHZ/C_SAMPLE_DIV) / samples_per_word. Must be <= 100 (FT601 ft_clk). 8ch @ 100 MS/s -> 25 Mword/s.}
 
   set phy [ipgui::add_group $IPINST -name {PHY} -parent $page -display_name {PHY and board}]
   ipgui::add_param $IPINST -name "C_PHY" -parent $phy
   ipgui::add_param $IPINST -name "C_BOARD" -parent $phy
+  ipgui::add_param $IPINST -name "C_PAD_MODE" -parent $phy
   ipgui::add_param $IPINST -name "C_INCLUDE_BR_XDC" -parent $phy
 
   set axi [ipgui::add_group $IPINST -name {AXI} -parent $page -display_name {AXI4-Lite}]
   ipgui::add_param $IPINST -name "C_HAS_AXI" -parent $axi
 
-  set_property display_name {Channels (1-8)} [ipgui::get_guiparamspec -name C_NUM_CH -component $IPINST]
-  set_property tooltip {Resizes probe_i. Unused channels pad to 0 inside the sampler.} [ipgui::get_guiparamspec -name C_NUM_CH -component $IPINST]
-  set_property display_name {Sample rate (MS/s)} [ipgui::get_guiparamspec -name C_SAMPLE_MHZ -component $IPINST]
-  set_property tooltip {200 = DDR at 100 MHz ft_clk. 100 = SDR. 400 MS/s / 4ch is later.} [ipgui::get_guiparamspec -name C_SAMPLE_MHZ -component $IPINST]
+  set_property display_name {Channels (4 / 8 / 16)} [ipgui::get_guiparamspec -name C_NUM_CH -component $IPINST]
+  set_property tooltip {Packing mode. 8 default. 16 is set aside. probe_i width follows. 4ch: 8 samples/word, 8ch: 4, 16ch: 2.} [ipgui::get_guiparamspec -name C_NUM_CH -component $IPINST]
+  set_property display_name {Input path} [ipgui::get_guiparamspec -name C_INPUT_PATH -component $IPINST]
+  set_property tooltip {Internal fabric (pattern or BD-routed probe_i) OR external LVCMOS33 pins. Not mixed.} [ipgui::get_guiparamspec -name C_INPUT_PATH -component $IPINST]
+  set_property display_name {Internal source} [ipgui::get_guiparamspec -name C_DEFAULT_SOURCE -component $IPINST]
+  set_property tooltip {Counter / walking-one / BD probe_i. Ignored when Input path = External.} [ipgui::get_guiparamspec -name C_DEFAULT_SOURCE -component $IPINST]
+  set_property display_name {Sample clock} [ipgui::get_guiparamspec -name C_SAMPLE_CLK_SRC -component $IPINST]
+  set_property tooltip {FT601 100 MHz ft_clk (default) or an external sample_clk. Keep related unless you add an async FIFO.} [ipgui::get_guiparamspec -name C_SAMPLE_CLK_SRC -component $IPINST]
+  set_property display_name {Sample clock (MHz)} [ipgui::get_guiparamspec -name C_SAMPLE_MHZ -component $IPINST]
+  set_property tooltip {Frequency of the selected sample clock. FT601 ft_clk is 100. Used with C_SAMPLE_DIV for the GUI rate math.} [ipgui::get_guiparamspec -name C_SAMPLE_MHZ -component $IPINST]
+  set_property display_name {Sample divider} [ipgui::get_guiparamspec -name C_SAMPLE_DIV -component $IPINST]
+  set_property tooltip {One sample every C_SAMPLE_DIV clocks of the sample clock. 1/2/4/8. Rate = C_SAMPLE_MHZ / div.} [ipgui::get_guiparamspec -name C_SAMPLE_DIV -component $IPINST]
   set_property display_name {Pre-trigger BRAM depth} [ipgui::get_guiparamspec -name C_PRETRIG_SAMPLES -component $IPINST]
   set_property tooltip {Circular BRAM entries. Power of two. Not DDR3. Live path dumps in 4 KiB PHY bursts.} [ipgui::get_guiparamspec -name C_PRETRIG_SAMPLES -component $IPINST]
   set_property display_name {Default post-trigger samples} [ipgui::get_guiparamspec -name C_DEFAULT_POST -component $IPINST]
-  set_property display_name {Default source} [ipgui::get_guiparamspec -name C_DEFAULT_SOURCE -component $IPINST]
   set_property display_name {PHY} [ipgui::get_guiparamspec -name C_PHY -component $IPINST]
-  set_property tooltip {FT601 pads are auto-pinned by the IP XDC (not BD nets). STREAM exposes m_axis_* for another PHY. FT601 uses Lucid WR and 4 KiB bursts.} [ipgui::get_guiparamspec -name C_PHY -component $IPINST]
+  set_property tooltip {FT601 pads are auto-pinned by the IP XDC (not BD nets). STREAM exposes m_axis_*. Lucid WR, 4 KiB bursts, RX unused.} [ipgui::get_guiparamspec -name C_PHY -component $IPINST]
   set_property display_name {Ft+ board pinout} [ipgui::get_guiparamspec -name C_BOARD -component $IPINST]
-  set_property tooltip {PT_ALPHA = first-batch DATA[0:13]. PT_V2 = production Pt. AU_V2 = Alchitry Au (proven PHY). Wrong file looks like bit swaps.} [ipgui::get_guiparamspec -name C_BOARD -component $IPINST]
+  set_property tooltip {Default AU_V2 (proven PHY). PT_ALPHA = first-batch DATA[0:13]. PT_V2 = production Pt.} [ipgui::get_guiparamspec -name C_BOARD -component $IPINST]
+  set_property display_name {DATA pads} [ipgui::get_guiparamspec -name C_PAD_MODE -component $IPINST]
+  set_property tooltip {IOBUF 245: real 32-bit inout, Hi-Z in IDLE, TX-only protocol (default). ALWAYS_DRIVE: proven OBUF TX, IBUFs trim in the schematic.} [ipgui::get_guiparamspec -name C_PAD_MODE -component $IPINST]
   set_property display_name {Include Br Bank A probe XDC} [ipgui::get_guiparamspec -name C_INCLUDE_BR_XDC -component $IPINST]
   set_property tooltip {Optional. Off by default — probe_i stays user-wired in the BD. Pt only.} [ipgui::get_guiparamspec -name C_INCLUDE_BR_XDC -component $IPINST]
   set_property display_name {AXI4-Lite slave} [ipgui::get_guiparamspec -name C_HAS_AXI -component $IPINST]
-  set_property tooltip {Arm / trigger / status. Same command word as the FT601 host path.} [ipgui::get_guiparamspec -name C_HAS_AXI -component $IPINST]
+  set_property tooltip {Arm / trigger / status. Off by default (auto-run internal counter).} [ipgui::get_guiparamspec -name C_HAS_AXI -component $IPINST]
 }
 
 proc update_PARAM_VALUE.C_NUM_CH { PARAM_VALUE.C_NUM_CH } {}
 proc validate_PARAM_VALUE.C_NUM_CH { PARAM_VALUE.C_NUM_CH } {
   set v [get_property value ${PARAM_VALUE.C_NUM_CH}]
-  if {$v < 1 || $v > 8} { return false }
+  if {$v != 4 && $v != 8 && $v != 16} { return false }
   return true
 }
 
 proc update_PARAM_VALUE.C_SAMPLE_MHZ { PARAM_VALUE.C_SAMPLE_MHZ } {}
 proc validate_PARAM_VALUE.C_SAMPLE_MHZ { PARAM_VALUE.C_SAMPLE_MHZ } {
   set v [get_property value ${PARAM_VALUE.C_SAMPLE_MHZ}]
-  if {$v != 100 && $v != 200} { return false }
+  if {$v < 1 || $v > 200} { return false }
   return true
 }
+
+proc update_PARAM_VALUE.C_SAMPLE_DIV { PARAM_VALUE.C_SAMPLE_DIV } {}
+proc validate_PARAM_VALUE.C_SAMPLE_DIV { PARAM_VALUE.C_SAMPLE_DIV } {
+  set v [get_property value ${PARAM_VALUE.C_SAMPLE_DIV}]
+  if {$v != 1 && $v != 2 && $v != 4 && $v != 8} { return false }
+  return true
+}
+
+proc update_PARAM_VALUE.C_SAMPLE_CLK_SRC { PARAM_VALUE.C_SAMPLE_CLK_SRC } {}
+proc validate_PARAM_VALUE.C_SAMPLE_CLK_SRC { PARAM_VALUE.C_SAMPLE_CLK_SRC } { return true }
+
+proc update_PARAM_VALUE.C_INPUT_PATH { PARAM_VALUE.C_INPUT_PATH } {}
+proc validate_PARAM_VALUE.C_INPUT_PATH { PARAM_VALUE.C_INPUT_PATH } { return true }
+
+proc update_PARAM_VALUE.C_PAD_MODE { PARAM_VALUE.C_PAD_MODE } {}
+proc validate_PARAM_VALUE.C_PAD_MODE { PARAM_VALUE.C_PAD_MODE } { return true }
 
 proc update_PARAM_VALUE.C_PRETRIG_SAMPLES { PARAM_VALUE.C_PRETRIG_SAMPLES } {}
 proc validate_PARAM_VALUE.C_PRETRIG_SAMPLES { PARAM_VALUE.C_PRETRIG_SAMPLES } {
@@ -92,6 +125,18 @@ proc update_MODELPARAM_VALUE.C_NUM_CH { MODELPARAM_VALUE.C_NUM_CH PARAM_VALUE.C_
 }
 proc update_MODELPARAM_VALUE.C_SAMPLE_MHZ { MODELPARAM_VALUE.C_SAMPLE_MHZ PARAM_VALUE.C_SAMPLE_MHZ } {
   set_property value [get_property value ${PARAM_VALUE.C_SAMPLE_MHZ}] ${MODELPARAM_VALUE.C_SAMPLE_MHZ}
+}
+proc update_MODELPARAM_VALUE.C_SAMPLE_DIV { MODELPARAM_VALUE.C_SAMPLE_DIV PARAM_VALUE.C_SAMPLE_DIV } {
+  set_property value [get_property value ${PARAM_VALUE.C_SAMPLE_DIV}] ${MODELPARAM_VALUE.C_SAMPLE_DIV}
+}
+proc update_MODELPARAM_VALUE.C_SAMPLE_CLK_SRC { MODELPARAM_VALUE.C_SAMPLE_CLK_SRC PARAM_VALUE.C_SAMPLE_CLK_SRC } {
+  set_property value [get_property value ${PARAM_VALUE.C_SAMPLE_CLK_SRC}] ${MODELPARAM_VALUE.C_SAMPLE_CLK_SRC}
+}
+proc update_MODELPARAM_VALUE.C_INPUT_PATH { MODELPARAM_VALUE.C_INPUT_PATH PARAM_VALUE.C_INPUT_PATH } {
+  set_property value [get_property value ${PARAM_VALUE.C_INPUT_PATH}] ${MODELPARAM_VALUE.C_INPUT_PATH}
+}
+proc update_MODELPARAM_VALUE.C_PAD_MODE { MODELPARAM_VALUE.C_PAD_MODE PARAM_VALUE.C_PAD_MODE } {
+  set_property value [get_property value ${PARAM_VALUE.C_PAD_MODE}] ${MODELPARAM_VALUE.C_PAD_MODE}
 }
 proc update_MODELPARAM_VALUE.C_PRETRIG_SAMPLES { MODELPARAM_VALUE.C_PRETRIG_SAMPLES PARAM_VALUE.C_PRETRIG_SAMPLES } {
   set_property value [get_property value ${PARAM_VALUE.C_PRETRIG_SAMPLES}] ${MODELPARAM_VALUE.C_PRETRIG_SAMPLES}

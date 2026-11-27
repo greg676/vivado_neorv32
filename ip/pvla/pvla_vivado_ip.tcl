@@ -5,7 +5,8 @@
 # -- (the catalog IP already used in this repo's Block Designs).                      --
 # --                                                                                  --
 # -- PHY RTL is the PR #18/#19 Lucid WR / 4 KiB burst core under                      --
-# -- platforms/alchitry-au-v2/rtl/ft601/. NeoRV32 is not rewritten.                   --
+# -- platforms/alchitry-au-v2/rtl/ft601/. Visible 4/8/16 packer.                       --
+# -- NeoRV32 is not rewritten.                                                        --
 # --                                                                                  --
 # -- In Vivado TCL console, from the repo root or this file's directory:              --
 # --   source ip/pvla/pvla_vivado_ip.tcl                                              --
@@ -31,6 +32,8 @@ set_property INCREMENTAL false [get_filesets sim_1]
 set file_list [list \
   [file join $au rtl/ft601/ft601_sync_fifo.v] \
   [file join $au rtl/ft601/ft601_reset.v] \
+  [file join $ip_dir hdl/pvla_word_packer.v] \
+  [file join $ip_dir hdl/pvla_internal_src.v] \
   [file join $ip_dir hdl/pvla_axi_lite.v] \
   [file join $ip_dir hdl/pvla_capture.v] \
   [file join $ip_dir hdl/pvla.v] \
@@ -63,7 +66,7 @@ set_property version 1.0 [ipx::current_core]
 set_property display_name "PVLA" [ipx::current_core]
 set_property vendor_display_name "greg676" [ipx::current_core]
 set_property company_url https://github.com/greg676/vivado_neorv32 [ipx::current_core]
-set_property description "PulseView logic analyzer (1-8 ch). FT601 Lucid WR / 4 KiB bursts; pins in an IP-scoped Ft+ XDC, not BD nets. No DDR3." [ipx::current_core]
+set_property description "PulseView logic analyzer (4/8/16 ch packer). Au V2 first. FT601 Lucid WR / 4 KiB bursts; IOBUF 245 pads; pins in an IP-scoped Ft+ XDC. No DDR3." [ipx::current_core]
 set_property supported_families {artix7 Production artix7 Production} [ipx::current_core]
 
 # ── Infer AXI / AXIS / clocks ───────────────────────────────────
@@ -101,15 +104,22 @@ proc pvla_user_param { name default fmt {min ""} {max ""} } {
   }
 }
 
-pvla_user_param C_NUM_CH          8    long 1 8
-pvla_user_param C_SAMPLE_MHZ      200  long
+pvla_user_param C_NUM_CH          8    long
+pvla_user_param C_SAMPLE_MHZ      100  long
+pvla_user_param C_SAMPLE_DIV      1    long
+pvla_user_param C_SAMPLE_CLK_SRC  0    long
+pvla_user_param C_INPUT_PATH      0    long
+pvla_user_param C_PAD_MODE        0    long
 pvla_user_param C_PRETRIG_SAMPLES 4096 long
 pvla_user_param C_DEFAULT_POST    2048 long
 pvla_user_param C_PHY             0    long
-pvla_user_param C_BOARD           0    long
-pvla_user_param C_HAS_AXI         1    long
+pvla_user_param C_BOARD           2    long
+pvla_user_param C_HAS_AXI         0    long
 pvla_user_param C_INCLUDE_BR_XDC  0    long
-pvla_user_param C_DEFAULT_SOURCE  2    long
+pvla_user_param C_DEFAULT_SOURCE  0    long
+
+set_property value_validation_type pairs [ipx::get_user_parameters C_NUM_CH -of_objects [ipx::current_core]]
+set_property value_validation_pairs {{4 ch (8 samples/word)} 4 {8 ch (4 samples/word)} 8 {16 ch (2 samples/word)} 16} [ipx::get_user_parameters C_NUM_CH -of_objects [ipx::current_core]]
 
 set_property value_validation_type pairs [ipx::get_user_parameters C_PHY -of_objects [ipx::current_core]]
 set_property value_validation_pairs {{FT601} 0 {STREAM} 1} [ipx::get_user_parameters C_PHY -of_objects [ipx::current_core]]
@@ -123,17 +133,26 @@ set_property value_validation_pairs {{Disabled} 0 {Enabled} 1} [ipx::get_user_pa
 set_property value_validation_type pairs [ipx::get_user_parameters C_INCLUDE_BR_XDC -of_objects [ipx::current_core]]
 set_property value_validation_pairs {{No (user-wired)} 0 {Yes (Br Bank A)} 1} [ipx::get_user_parameters C_INCLUDE_BR_XDC -of_objects [ipx::current_core]]
 
-set_property value_validation_type pairs [ipx::get_user_parameters C_SAMPLE_MHZ -of_objects [ipx::current_core]]
-set_property value_validation_pairs {{100 MS/s SDR} 100 {200 MS/s DDR} 200} [ipx::get_user_parameters C_SAMPLE_MHZ -of_objects [ipx::current_core]]
+set_property value_validation_type pairs [ipx::get_user_parameters C_SAMPLE_DIV -of_objects [ipx::current_core]]
+set_property value_validation_pairs {{1 (full rate)} 1 {2} 2 {4} 4 {8} 8} [ipx::get_user_parameters C_SAMPLE_DIV -of_objects [ipx::current_core]]
+
+set_property value_validation_type pairs [ipx::get_user_parameters C_SAMPLE_CLK_SRC -of_objects [ipx::current_core]]
+set_property value_validation_pairs {{FT601 100 MHz} 0 {External sample_clk} 1} [ipx::get_user_parameters C_SAMPLE_CLK_SRC -of_objects [ipx::current_core]]
+
+set_property value_validation_type pairs [ipx::get_user_parameters C_INPUT_PATH -of_objects [ipx::current_core]]
+set_property value_validation_pairs {{Internal fabric} 0 {External pins} 1} [ipx::get_user_parameters C_INPUT_PATH -of_objects [ipx::current_core]]
+
+set_property value_validation_type pairs [ipx::get_user_parameters C_PAD_MODE -of_objects [ipx::current_core]]
+set_property value_validation_pairs {{IOBUF 245} 0 {ALWAYS_DRIVE} 1} [ipx::get_user_parameters C_PAD_MODE -of_objects [ipx::current_core]]
 
 set_property value_validation_type pairs [ipx::get_user_parameters C_DEFAULT_SOURCE -of_objects [ipx::current_core]]
-set_property value_validation_pairs {{Counter} 0 {Walking-one} 1 {Live probes} 2} [ipx::get_user_parameters C_DEFAULT_SOURCE -of_objects [ipx::current_core]]
+set_property value_validation_pairs {{Counter} 0 {Walking-one} 1 {BD probe_i} 2} [ipx::get_user_parameters C_DEFAULT_SOURCE -of_objects [ipx::current_core]]
 
 # ── Port enablement (hide FT601 from STREAM; hide AXIS from FT601) ─
 set_property enablement_dependency {$C_PHY == 0} [ipx::get_ports ft_* -of_objects [ipx::current_core]]
 set_property enablement_dependency {$C_PHY == 1} [ipx::get_ports m_axis_* -of_objects [ipx::current_core]]
-set_property enablement_dependency {$C_PHY == 1} [ipx::get_ports sample_clk -of_objects [ipx::current_core]]
-set_property enablement_dependency {$C_PHY == 1} [ipx::get_ports sample_rst_n -of_objects [ipx::current_core]]
+set_property enablement_dependency {$C_PHY == 1 || $C_SAMPLE_CLK_SRC == 1} [ipx::get_ports sample_clk -of_objects [ipx::current_core]]
+set_property enablement_dependency {$C_PHY == 1 || $C_SAMPLE_CLK_SRC == 1} [ipx::get_ports sample_rst_n -of_objects [ipx::current_core]]
 set_property enablement_dependency {$C_PHY == 0} [ipx::get_ports clk -of_objects [ipx::current_core]]
 set_property enablement_dependency {$C_PHY == 0} [ipx::get_ports rst_n -of_objects [ipx::current_core]]
 set_property enablement_dependency {$C_HAS_AXI != 0} [ipx::get_ports s_axi_* -of_objects [ipx::current_core]]
@@ -202,25 +221,36 @@ proc setup_ip_gui {} {
 
   set page [ipgui::add_page -name {General} -component [ipx::current_core] -display_name {General}]
   ipgui::add_static_text -name {About} -component [ipx::current_core] -parent $page \
-    -text {PVLA is a fabric logic analyzer that streams to PulseView. User designs keep MIG7/DDR. FT601 pins live in an Ft+ board XDC (SCOPED_TO_REF), not wires on the BD. PHY is Lucid DATA-before-WR with 4 KiB bursts (PR #18/#19).}
+    -text {PVLA packs 4/8/16 channels into 32-bit FT601 USB words. Default: Au V2, internal counter, IOBUF 245, TX-only host IN. Sample rate = C_SAMPLE_MHZ / C_SAMPLE_DIV. USB Mword/s = sample_MHz / (32/C_NUM_CH) and must be <= 100. 4 KiB WR-after-TXE. No DDR3. No NeoRV32.}
 
   set g [ipgui::add_group -name {Capture} -component [ipx::current_core] -parent $page -display_name {Capture}]
-  foreach n {C_NUM_CH C_SAMPLE_MHZ C_PRETRIG_SAMPLES C_DEFAULT_POST C_DEFAULT_SOURCE} {
+  foreach n {C_NUM_CH C_INPUT_PATH C_DEFAULT_SOURCE C_PRETRIG_SAMPLES C_DEFAULT_POST} {
     ipgui::add_param -name $n -component [ipx::current_core] -parent $g
   }
-  set_param_properties C_NUM_CH {Channels (1-8)} {Resizes probe_i. Unused channels pad to 0.}
-  set_param_properties C_SAMPLE_MHZ {Sample rate} {200 MS/s first cut (DDR @ 100 MHz). 100 = SDR. 400 later.}
+  set_param_properties C_NUM_CH {Channels (4 / 8 / 16)} {Packing mode. 8 default. 4ch: 8 samples/word, 8ch: 4, 16ch: 2.}
+  set_param_properties C_INPUT_PATH {Input path} {Internal fabric OR external LVCMOS33 pins. Not mixed.}
+  set_param_properties C_DEFAULT_SOURCE {Internal source} {Counter / walking-one / BD probe_i. Ignored when path is External.} {$C_INPUT_PATH == 0}
   set_param_properties C_PRETRIG_SAMPLES {Pre-trigger BRAM depth} {Power of two. Not DDR3. Live dumps in 4 KiB PHY bursts.}
   set_param_properties C_DEFAULT_POST {Default post-trigger samples} {}
-  set_param_properties C_DEFAULT_SOURCE {Default source} {Counter / walking-one / live probes}
 
-  set g [ipgui::add_group -name {PHY} -component [ipx::current_core] -parent $page -display_name {PHY and board}]
-  foreach n {C_PHY C_BOARD C_INCLUDE_BR_XDC} {
+  set g [ipgui::add_group -name {Clocks} -component [ipx::current_core] -parent $page -display_name {Clocks vs FT601 100 MHz}]
+  foreach n {C_SAMPLE_CLK_SRC C_SAMPLE_MHZ C_SAMPLE_DIV} {
     ipgui::add_param -name $n -component [ipx::current_core] -parent $g
   }
-  set_param_properties C_PHY {PHY} {FT601 pads are auto-pinned. STREAM exposes m_axis_* .}
-  set_param_properties C_BOARD {Ft+ board pinout} {PT_ALPHA first-batch DATA[0:13]; PT_V2 production Pt; AU_V2 Au.} {$C_PHY == 0}
-  set_param_properties C_INCLUDE_BR_XDC {Include Br Bank A probe XDC} {Optional. Probe ports stay user-wired unless enabled. Pt only.}
+  ipgui::add_static_text -name {RateMath} -component [ipx::current_core] -parent $g \
+    -text {samples/word = 32/C_NUM_CH. usb_Mword/s = (C_SAMPLE_MHZ/C_SAMPLE_DIV)/samples_per_word. 8ch @ 100 MS/s -> 25 Mword/s USB.}
+  set_param_properties C_SAMPLE_CLK_SRC {Sample clock} {FT601 100 MHz ft_clk or external sample_clk.}
+  set_param_properties C_SAMPLE_MHZ {Sample clock (MHz)} {ft_clk is 100. Used with the divider for the rate math.}
+  set_param_properties C_SAMPLE_DIV {Sample divider} {1/2/4/8. Rate = C_SAMPLE_MHZ / div.}
+
+  set g [ipgui::add_group -name {PHY} -component [ipx::current_core] -parent $page -display_name {PHY and board}]
+  foreach n {C_PHY C_BOARD C_PAD_MODE C_INCLUDE_BR_XDC} {
+    ipgui::add_param -name $n -component [ipx::current_core] -parent $g
+  }
+  set_param_properties C_PHY {PHY} {FT601 pads are auto-pinned. STREAM exposes m_axis_*.}
+  set_param_properties C_BOARD {Ft+ board pinout} {Default AU_V2. PT_ALPHA first-batch DATA[0:13]; PT_V2 production Pt.} {$C_PHY == 0}
+  set_param_properties C_PAD_MODE {DATA pads} {IOBUF 245 (default, real 32-bit inout). ALWAYS_DRIVE is the proven OBUF TX escape hatch.} {$C_PHY == 0}
+  set_param_properties C_INCLUDE_BR_XDC {Include Br Bank A probe XDC} {Optional. Probe ports stay user-wired unless enabled. Pt only.} {$C_INPUT_PATH == 1}
 
   set g [ipgui::add_group -name {AXI} -component [ipx::current_core] -parent $page -display_name {AXI4-Lite}]
   ipgui::add_param -name C_HAS_AXI -component [ipx::current_core] -parent $g
@@ -234,7 +264,7 @@ set bd_grp [ipx::add_file_group -type {block_diagram_automation} {} [ipx::curren
 ipx::add_file bd/bd.tcl [ipx::get_file_groups xilinx_blockdiagramautomation -of_objects [ipx::current_core]]
 
 set_property previous_version_for_upgrade greg676:user:pvla:1.0 [ipx::current_core]
-set_property core_revision 2 [ipx::current_core]
+set_property core_revision 3 [ipx::current_core]
 
 ipx::create_xgui_files [ipx::current_core]
 ipx::update_checksums [ipx::current_core]
@@ -246,6 +276,6 @@ update_ip_catalog
 puts "PVLA packaged at $ip_dir"
 puts "Add IP repository: $repo_root/ip"
 puts "VLNV: greg676:user:pvla:1.0"
-puts "PHY: platforms/alchitry-au-v2/rtl/ft601 (Lucid WR, 4 KiB, ALWAYS_DRIVE)"
+puts "PHY: platforms/alchitry-au-v2/rtl/ft601 (Lucid WR, 4 KiB, IOBUF default)"
 
 close_project

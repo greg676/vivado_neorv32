@@ -1,28 +1,32 @@
 `timescale 1ns / 1ps
-// PVLA capture datapath on the PR #18/#19 PHY.
+// PVLA capture: visible 4/8/16 packer -> 4 KiB ping-pong -> Lucid WR PHY.
 //
-// C_PHY=0 FT601  — ft601_sync_fifo ALWAYS_DRIVE, TX_BURST_WORDS=1024
-//                  (Lucid DATA-before-WR, 4 KiB write bursts, NEVER RD)
-// C_PHY=1 STREAM — 32-bit AXI-Stream master for a later SuperSpeed FIFO
+// C_PHY=0 FT601  — ft601_sync_fifo, TX_BURST_WORDS=1024, rx_ready=0
+//                  C_PAD_MODE 0 = IOBUF 245 (default)  1 = ALWAYS_DRIVE
+// C_PHY=1 STREAM — 32-bit AXI-Stream master
 //
-// Counter / walking-one: one 32-bit word every clock while tx_ready, same
-// pack as platforms/alchitry-au-v2/rtl/la (Au LA capture PASS).
-// Live probes: 4 samples/word into a 1024-word ping-pong so the PHY never
-// sees a short write (FT601 245 ping-pong commits USB IN on 4 KiB).
+// One sample per samp_clk/C_SAMPLE_DIV. N samples fill one 32-bit USB word.
+// Packed words land in two 1024-word BRAM banks so ST_WRITE never sees a
+// short burst (FT601 245 ping-pong commits USB IN on 4 KiB).
 //
-// Do not instantiate the old echo FWFT that starved WR mid-burst.
 // Does not touch DDR3 / MIG / NeoRV32.
 module pvla_capture #(
     parameter integer C_PHY             = 0,
-    parameter integer C_HAS_AXI         = 1,
+    parameter integer C_HAS_AXI         = 0,
     parameter integer C_NUM_CH          = 8,
-    parameter integer C_SAMPLE_MHZ      = 200,
+    parameter integer C_SAMPLE_MHZ      = 100,
+    parameter integer C_SAMPLE_DIV      = 1,
+    parameter integer C_SAMPLE_CLK_SRC  = 0,
+    parameter integer C_INPUT_PATH      = 0,
+    parameter integer C_PAD_MODE        = 0,
     parameter integer C_PRETRIG_SAMPLES = 4096,
     parameter integer C_DEFAULT_POST    = 2048,
-    parameter [1:0]   C_DEFAULT_SOURCE  = 2'd2
+    parameter [1:0]   C_DEFAULT_SOURCE  = 2'd0
 ) (
     input  wire                  cap_clk,
     input  wire                  cap_rst,
+    input  wire                  samp_clk,
+    input  wire                  samp_rst,
 
     input  wire [C_NUM_CH-1:0]   probe_i,
 
@@ -57,49 +61,39 @@ module pvla_capture #(
     localparam integer BURST    = 1024;
     localparam [1:0]   SRC_CTR  = 2'd0;
     localparam [1:0]   SRC_WALK = 2'd1;
-    localparam [1:0]   SRC_LIVE = 2'd2;
-
-    // CMD @ 0x00 — same 32-bit word as the host/AXI path.
-    // [1:0] source  [2] arm  [3] soft_trig  [4] abort
+    localparam [1:0]   SRC_PROBE= 2'd2;
     localparam integer CMD_ARM  = 2;
     localparam integer CMD_TRIG = 3;
     localparam integer CMD_ABRT = 4;
+    localparam integer DIV      = (C_SAMPLE_DIV < 1) ? 1 : C_SAMPLE_DIV;
 
-    (* keep = "true" *) wire unused_pre =
-        (C_PRETRIG_SAMPLES[0] ^ C_DEFAULT_POST[0]);
+    (* keep = "true" *) wire unused_cfg =
+        (C_SAMPLE_MHZ != 0) ^ (C_PRETRIG_SAMPLES != 0) ^ (C_DEFAULT_POST != 0)
+        ^ (C_SAMPLE_CLK_SRC != 0) ^ (C_PAD_MODE != 0);
 
-    wire [7:0] probe_pad;
-    generate
-        if (C_NUM_CH >= 8)
-            assign probe_pad = probe_i[7:0];
-        else
-            assign probe_pad = {{(8-C_NUM_CH){1'b0}}, probe_i};
-    endgenerate
-
-    // ── command / source ─────────────────────────────────────────
+    // ── command / source (sample domain) ─────────────────────────
+    // C_INPUT_PATH=1 (external) forces probe pins; never mix with pattern.
     reg [1:0]  source_r;
     reg        armed_r;
     reg        trig_r;
     reg        done_r;
-    reg        ovf_r;
-    reg [31:0] ovf_cnt_r;
-    reg [31:0] drop_cnt_r;
-    reg [7:0]  probe_d;
-    wire       edge0 = probe_pad[0] & ~probe_d[0];
+    reg [C_NUM_CH-1:0] probe_d;
+    wire       edge0 = probe_i[0] & ~probe_d[0];
+    wire       auto_run = (C_HAS_AXI == 0);
+    wire [1:0] src_eff = (C_INPUT_PATH != 0) ? SRC_PROBE : source_r;
 
-    wire auto_run = (C_HAS_AXI == 0);
-
-    always @(posedge cap_clk) begin
-        if (cap_rst) begin
-            source_r  <= C_DEFAULT_SOURCE;
-            armed_r   <= auto_run;
-            trig_r    <= 1'b0;
-            done_r    <= 1'b0;
-            probe_d   <= 8'h00;
+    always @(posedge samp_clk) begin
+        if (samp_rst) begin
+            source_r <= C_DEFAULT_SOURCE;
+            armed_r  <= auto_run;
+            trig_r   <= 1'b0;
+            done_r   <= 1'b0;
+            probe_d  <= {C_NUM_CH{1'b0}};
         end else begin
-            probe_d <= probe_pad;
+            probe_d <= probe_i;
             if (cmd_valid) begin
-                source_r <= cmd_data[1:0];
+                if (C_INPUT_PATH == 0)
+                    source_r <= cmd_data[1:0];
                 if (cmd_data[CMD_ABRT]) begin
                     armed_r <= 1'b0;
                     trig_r  <= 1'b0;
@@ -111,7 +105,7 @@ module pvla_capture #(
                 end
                 if (cmd_data[CMD_TRIG])
                     trig_r <= 1'b1;
-            end else if (armed_r && !trig_r && (source_r == SRC_LIVE) && edge0) begin
+            end else if (armed_r && !trig_r && (src_eff == SRC_PROBE) && edge0) begin
                 trig_r <= 1'b1;
             end else if (auto_run) begin
                 armed_r <= 1'b1;
@@ -119,201 +113,192 @@ module pvla_capture #(
         end
     end
 
-    assign source_sel = source_r;
+    assign source_sel = src_eff;
     assign armed      = armed_r;
-    assign triggered  = trig_r || (source_r != SRC_LIVE && armed_r);
+    assign triggered  = trig_r || (src_eff != SRC_PROBE && armed_r);
     assign cap_done   = done_r;
 
-    wire is_pat = (source_r == SRC_CTR) || (source_r == SRC_WALK);
+    // ── sample strobe: samp_clk / C_SAMPLE_DIV ───────────────────
+    reg [3:0] div_cnt;
+    wire      div_tick = (DIV == 1) || (div_cnt == DIV[3:0] - 4'd1);
 
-    // ── pattern: 4 samples / clock, advance on tx_ready (PR #19) ─
-    wire        tx_ready;
-    reg  [31:0] pat_n;
-    wire [7:0]  pat_s0, pat_s1, pat_s2, pat_s3;
-    wire        pat_en = armed_r && is_pat && tx_ready;
-
-    function automatic [7:0] pat_samp;
-        input [31:0] idx;
-        begin
-            if (source_r == SRC_WALK)
-                pat_samp = 8'd1 << idx[2:0];
-            else
-                pat_samp = idx[7:0];
-        end
-    endfunction
-
-    assign pat_s0 = pat_samp(pat_n);
-    assign pat_s1 = pat_samp(pat_n + 32'd1);
-    assign pat_s2 = pat_samp(pat_n + 32'd2);
-    assign pat_s3 = pat_samp(pat_n + 32'd3);
-
-    always @(posedge cap_clk) begin
-        if (cap_rst || (cmd_valid && cmd_data[CMD_ARM]))
-            pat_n <= 32'd0;
-        else if (pat_en)
-            pat_n <= pat_n + 32'd4;
+    always @(posedge samp_clk) begin
+        if (samp_rst || !armed_r)
+            div_cnt <= 4'd0;
+        else if (div_tick)
+            div_cnt <= 4'd0;
+        else
+            div_cnt <= div_cnt + 4'd1;
     end
 
-    wire [31:0] pat_word = {pat_s3, pat_s2, pat_s1, pat_s0};
+    wire [C_NUM_CH-1:0] int_sample;
+    wire                int_valid;
+    wire                ext_ce = armed_r && div_tick;
 
-    // ── live sampler ─────────────────────────────────────────────
-    wire [7:0] live_a;
-    wire [7:0] live_b;
-    generate
-        if (C_SAMPLE_MHZ == 200) begin : g_ddr
-            genvar gi;
-            for (gi = 0; gi < 8; gi = gi + 1) begin : g_iddr
-                IDDR #(
-                    .DDR_CLK_EDGE("SAME_EDGE_PIPELINED"),
-                    .INIT_Q1     (1'b0),
-                    .INIT_Q2     (1'b0),
-                    .SRTYPE      ("ASYNC")
-                ) u_iddr (
-                    .Q1 (live_a[gi]),
-                    .Q2 (live_b[gi]),
-                    .C  (cap_clk),
-                    .CE (1'b1),
-                    .D  (probe_pad[gi]),
-                    .R  (cap_rst),
-                    .S  (1'b0)
-                );
-            end
-        end else begin : g_sdr
-            reg [7:0] live_r;
-            always @(posedge cap_clk)
-                live_r <= probe_pad;
-            assign live_a = live_r;
-            assign live_b = live_r;
-        end
-    endgenerate
+    pvla_internal_src #(
+        .C_NUM_CH (C_NUM_CH)
+    ) u_src (
+        .clk          (samp_clk),
+        .rst          (samp_rst || !armed_r),
+        .ce           (ext_ce && (C_INPUT_PATH == 0) && (src_eff != SRC_PROBE)),
+        .src          (src_eff),
+        .probe_i      (probe_i),
+        .sample_o     (int_sample),
+        .sample_valid (int_valid)
+    );
 
-    // Pack 4 unique samples per word. 100 MS/s: 4 clocks. 200 MS/s: 2 clocks.
-    reg [1:0]  live_ph;
-    reg [7:0]  live_h0, live_h1, live_h2;
-    reg [31:0] live_word;
-    reg        live_valid;
-
-    always @(posedge cap_clk) begin
-        if (cap_rst || !armed_r || is_pat) begin
-            live_ph    <= 2'd0;
-            live_valid <= 1'b0;
-            live_word  <= 32'h0;
-        end else if (C_SAMPLE_MHZ == 200) begin
-            live_valid <= 1'b0;
-            if (live_ph[0] == 1'b0) begin
-                live_h0 <= live_a;
-                live_h1 <= live_b;
-                live_ph <= 2'd1;
-            end else begin
-                live_word  <= {live_b, live_a, live_h1, live_h0};
-                live_valid <= 1'b1;
-                live_ph    <= 2'd0;
-            end
+    // External / BD probe: register on the divider tick (LVCMOS33 pins or canvas).
+    reg [C_NUM_CH-1:0] probe_r;
+    reg                probe_v;
+    always @(posedge samp_clk) begin
+        if (samp_rst || !armed_r) begin
+            probe_r <= {C_NUM_CH{1'b0}};
+            probe_v <= 1'b0;
         end else begin
-            live_valid <= 1'b0;
-            case (live_ph)
-                2'd0: begin live_h0 <= live_a; live_ph <= 2'd1; end
-                2'd1: begin live_h1 <= live_a; live_ph <= 2'd2; end
-                2'd2: begin live_h2 <= live_a; live_ph <= 2'd3; end
-                default: begin
-                    live_word  <= {live_a, live_h2, live_h1, live_h0};
-                    live_valid <= 1'b1;
-                    live_ph    <= 2'd0;
-                end
-            endcase
+            probe_v <= 1'b0;
+            if (ext_ce && ((C_INPUT_PATH != 0) || (src_eff == SRC_PROBE))) begin
+                probe_r <= probe_i;
+                probe_v <= 1'b1;
+            end
         end
     end
 
-    // ── 4 KiB ping-pong (live only). Two 1024-word banks. ─────────
+    wire [C_NUM_CH-1:0] sample_w = (int_valid) ? int_sample : probe_r;
+    wire                sample_v = int_valid | probe_v;
+
+    // ── packer (sample domain) ───────────────────────────────────
+    wire [31:0] packed_word;
+    wire        packed_valid;
+    wire        packed_ready;
+    wire        pack_ready;
+
+    pvla_word_packer #(
+        .C_NUM_CH (C_NUM_CH)
+    ) u_pack (
+        .clk          (samp_clk),
+        .rst          (samp_rst),
+        .arm          (armed_r),
+        .sample_i     (sample_w),
+        .sample_valid (sample_v),
+        .sample_ready (pack_ready),
+        .word_o       (packed_word),
+        .word_valid   (packed_valid),
+        .word_ready   (packed_ready)
+    );
+
+    // ── 4 KiB ping-pong: write samp_clk, dump cap_clk ────────────
     (* ram_style = "block" *) reg [31:0] burst_mem [0:2047];
-    reg        wr_bank, rd_bank;
-    reg [9:0]  wr_n, rd_n;
-    reg [1:0]  bank_full;
+
+    reg        wr_bank;
+    reg [9:0]  wr_n;
+    reg [1:0]  wr_fill_tog;
+    reg        rd_bank;
+    reg [9:0]  rd_n;
+    reg [1:0]  rd_empty_tog;
     reg        dumping;
     reg        dump_load;
     reg [31:0] rd_q;
-    reg        live_ovf;
+    (* ASYNC_REG = "TRUE" *) reg [1:0] rd_empty_s1, rd_empty_s2;
+    (* ASYNC_REG = "TRUE" *) reg [1:0] wr_fill_c1, wr_fill_c2;
+    wire [1:0] rd_empty_w = rd_empty_s2;
+    wire       wr_full    = (wr_fill_tog[wr_bank] != rd_empty_w[wr_bank]);
 
-    wire [10:0] wr_addr = {wr_bank, wr_n};
-    wire [10:0] rd_addr = {rd_bank, rd_n};
-    wire        live_wr = live_valid && armed_r && !is_pat && !bank_full[wr_bank];
+    assign packed_ready = !wr_full;
 
-    always @(posedge cap_clk) begin
-        if (live_wr)
-            burst_mem[wr_addr] <= live_word;
-        rd_q <= burst_mem[rd_addr];
+    always @(posedge samp_clk) begin
+        if (samp_rst) begin
+            rd_empty_s1 <= 2'b00;
+            rd_empty_s2 <= 2'b00;
+        end else begin
+            rd_empty_s1 <= rd_empty_tog;
+            rd_empty_s2 <= rd_empty_s1;
+        end
     end
 
-    always @(posedge cap_clk) begin
-        if (cap_rst || (cmd_valid && (cmd_data[CMD_ABRT] || cmd_data[CMD_ARM]))) begin
-            wr_bank   <= 1'b0;
-            rd_bank   <= 1'b0;
-            wr_n      <= 10'd0;
-            rd_n      <= 10'd0;
-            bank_full <= 2'b00;
-            dumping   <= 1'b0;
-            dump_load <= 1'b0;
-            live_ovf  <= 1'b0;
-        end else if (!is_pat) begin
-            if (live_valid && armed_r) begin
-                if (bank_full[wr_bank])
-                    live_ovf <= 1'b1;
-                else begin
-                    if (wr_n == 10'd1023) begin
-                        wr_n                <= 10'd0;
-                        bank_full[wr_bank]  <= 1'b1;
-                        wr_bank             <= ~wr_bank;
-                    end else
-                        wr_n <= wr_n + 1'b1;
-                end
-            end
+    always @(posedge samp_clk) begin
+        if (samp_rst || (cmd_valid && (cmd_data[CMD_ABRT] || cmd_data[CMD_ARM]))) begin
+            wr_bank      <= 1'b0;
+            wr_n         <= 10'd0;
+            wr_fill_tog  <= 2'b00;
+        end else if (packed_valid && packed_ready) begin
+            burst_mem[{wr_bank, wr_n}] <= packed_word;
+            if (wr_n == 10'd1023) begin
+                wr_n                  <= 10'd0;
+                wr_fill_tog[wr_bank]  <= ~wr_fill_tog[wr_bank];
+                wr_bank               <= ~wr_bank;
+            end else
+                wr_n <= wr_n + 10'd1;
+        end
+    end
 
-            if (!dumping && !dump_load && bank_full[rd_bank]) begin
-                dump_load <= 1'b1;
-                rd_n      <= 10'd0;
-            end else if (dump_load) begin
-                dump_load <= 1'b0;
-                dumping   <= 1'b1;
-            end else if (dumping && tx_ready) begin
-                if (rd_n == 10'd1023) begin
-                    dumping            <= 1'b0;
-                    bank_full[rd_bank] <= 1'b0;
-                    rd_bank            <= ~rd_bank;
-                    rd_n               <= 10'd0;
-                end else
-                    rd_n <= rd_n + 1'b1;
-            end
+    wire       rd_full = (wr_fill_c2[rd_bank] != rd_empty_tog[rd_bank]);
+    wire       tx_ready;
+
+    always @(posedge cap_clk) begin
+        if (cap_rst) begin
+            wr_fill_c1 <= 2'b00;
+            wr_fill_c2 <= 2'b00;
+            rd_q       <= 32'h0;
+        end else begin
+            wr_fill_c1 <= wr_fill_tog;
+            wr_fill_c2 <= wr_fill_c1;
+            rd_q       <= burst_mem[{rd_bank, rd_n}];
         end
     end
 
     always @(posedge cap_clk) begin
         if (cap_rst) begin
-            ovf_r     <= 1'b0;
-            ovf_cnt_r <= 32'd0;
-            drop_cnt_r<= 32'd0;
-        end else begin
-            if (live_ovf)
-                ovf_r <= 1'b1;
-            if (live_valid && armed_r && !is_pat && bank_full[wr_bank]) begin
-                ovf_cnt_r  <= ovf_cnt_r + 1'b1;
-                drop_cnt_r <= drop_cnt_r + 1'b1;
-            end
+            rd_bank       <= 1'b0;
+            rd_n          <= 10'd0;
+            rd_empty_tog  <= 2'b00;
+            dumping       <= 1'b0;
+            dump_load     <= 1'b0;
+        end else if (!dumping && !dump_load && rd_full) begin
+            dump_load <= 1'b1;
+            rd_n      <= 10'd0;
+        end else if (dump_load) begin
+            dump_load <= 1'b0;
+            dumping   <= 1'b1;
+        end else if (dumping && tx_ready) begin
+            if (rd_n == 10'd1023) begin
+                dumping                 <= 1'b0;
+                rd_empty_tog[rd_bank]   <= ~rd_empty_tog[rd_bank];
+                rd_bank                 <= ~rd_bank;
+                rd_n                    <= 10'd0;
+            end else
+                rd_n <= rd_n + 10'd1;
+        end
+    end
+
+    // Overflow: a packed word arrived while the write bank was full.
+    reg        ovf_r;
+    reg [31:0] ovf_cnt_r;
+    reg [31:0] drop_cnt_r;
+    always @(posedge samp_clk) begin
+        if (samp_rst) begin
+            ovf_r      <= 1'b0;
+            ovf_cnt_r  <= 32'd0;
+            drop_cnt_r <= 32'd0;
+        end else if (packed_valid && !packed_ready) begin
+            ovf_r      <= 1'b1;
+            ovf_cnt_r  <= ovf_cnt_r + 32'd1;
+            drop_cnt_r <= drop_cnt_r + 32'd1;
+        end else if (sample_v && !pack_ready) begin
+            ovf_r      <= 1'b1;
+            ovf_cnt_r  <= ovf_cnt_r + 32'd1;
+            drop_cnt_r <= drop_cnt_r + 32'd1;
         end
     end
 
     assign overflow_sticky = ovf_r;
     assign overflow_cnt    = ovf_cnt_r;
     assign drop_cnt        = drop_cnt_r;
+    assign fifo_empty      = ~dumping;
+    assign fifo_full       = wr_full;
 
-    wire        live_tx_valid = dumping;
-    wire [31:0] live_tx_data  = rd_q;
-
-    wire        tx_valid = is_pat ? armed_r : live_tx_valid;
-    wire [31:0] tx_data  = is_pat ? pat_word : live_tx_data;
-    wire        tx_last  = (!is_pat) && dumping && (rd_n == 10'd1023);
-
-    assign fifo_empty = is_pat ? 1'b0 : ~dumping;
-    assign fifo_full  = |bank_full;
+    wire        tx_valid = dumping;
+    wire [31:0] tx_data  = rd_q;
+    wire        tx_last  = dumping && (rd_n == 10'd1023);
 
     // ── PHY / STREAM ─────────────────────────────────────────────
     wire [31:0] phy_rx_data;
@@ -323,7 +308,7 @@ module pvla_capture #(
     generate
         if (C_PHY == 0) begin : g_ft601
             ft601_sync_fifo #(
-                .ALWAYS_DRIVE   (1),
+                .ALWAYS_DRIVE   (C_PAD_MODE),
                 .TX_BURST_WORDS (BURST)
             ) u_phy (
                 .ft_clk   (cap_clk),
@@ -348,7 +333,7 @@ module pvla_capture #(
             assign m_axis_tdata  = 32'h0;
             assign m_axis_tvalid = 1'b0;
             assign m_axis_tlast  = 1'b0;
-            assign tx_active     = tx_ready;
+            assign tx_active     = dumping;
         end else begin : g_stream
             assign phy_rx_data  = 32'h0;
             assign phy_rx_be    = 4'h0;
@@ -368,8 +353,9 @@ module pvla_capture #(
         end
     endgenerate
 
-    (* keep = "true" *) wire [31:0] rx_data_keep  = phy_rx_data;
-    (* keep = "true" *) wire [3:0]  rx_be_keep    = phy_rx_be;
-    (* keep = "true" *) wire        rx_valid_keep = phy_rx_valid;
+    (* keep = "true" *) wire [31:0] packed_keep    = packed_word;
+    (* keep = "true" *) wire [31:0] rx_data_keep   = phy_rx_data;
+    (* keep = "true" *) wire [3:0]  rx_be_keep     = phy_rx_be;
+    (* keep = "true" *) wire        rx_valid_keep  = phy_rx_valid;
 
 endmodule

@@ -1,46 +1,42 @@
 `timescale 1ns / 1ps
 // PVLA — PulseView logic analyzer, packaged as a Vivado catalog IP.
 //
-// Mirrors the NEORV32 IP in this repo: one BD block, GUI parameters,
-// AXI-lite MMIO. FT601 pads are I/O of this module so an IP-scoped XDC
-// can bind package pins (MIG-style). The example BD TCL auto-promotes
-// those pads to the wrapper and does not draw FT601 nets between cells.
+// Educational 4/8/16-channel packer: N samples fill one 32-bit USB word.
+// Au V2 + Ft+ FT601 first. SRAM/BRAM only. No DDR3, no QSPI, no NeoRV32.
 //
-// PHY is the PR #18/#19 Lucid WR / 4 KiB burst FT601 (ALWAYS_DRIVE),
-// not the old echo that starved WR. Capture RTL is not a NeoRV32 rewrite.
-//
-// C_PHY  0 = FT601 (default)   1 = STREAM (m_axis_* for another PHY)
-// C_BOARD 0 = PT_ALPHA  1 = PT_V2  2 = AU_V2
+// C_PHY        0 = FT601 (default)   1 = STREAM (m_axis_* for another PHY)
+// C_BOARD      0 = PT_ALPHA  1 = PT_V2  2 = AU_V2 (default)
+// C_INPUT_PATH 0 = internal fabric    1 = external LVCMOS33 pins
+// C_PAD_MODE   0 = IOBUF 245          1 = ALWAYS_DRIVE (proven TX OBUF)
 //
 // Probe ports stay user-wired. Optional Br Bank A XDC is off by default.
-// No onboard DDR3. No QSPI flash programming.
 module pvla #(
     parameter integer C_NUM_CH          = 8,
-    parameter integer C_SAMPLE_MHZ      = 200,
+    parameter integer C_SAMPLE_MHZ      = 100,
+    parameter integer C_SAMPLE_DIV      = 1,
+    parameter integer C_SAMPLE_CLK_SRC  = 0,
+    parameter integer C_INPUT_PATH      = 0,
+    parameter integer C_PAD_MODE        = 0,
     parameter integer C_PRETRIG_SAMPLES = 4096,
     parameter integer C_DEFAULT_POST    = 2048,
     parameter integer C_PHY             = 0,
-    parameter integer C_BOARD           = 0,
-    parameter integer C_HAS_AXI         = 1,
+    parameter integer C_BOARD           = 2,
+    parameter integer C_HAS_AXI         = 0,
     parameter integer C_INCLUDE_BR_XDC  = 0,
-    parameter integer C_DEFAULT_SOURCE  = 2,
+    parameter integer C_DEFAULT_SOURCE  = 0,
     parameter integer C_S_AXI_ADDR_WIDTH = 8,
     parameter integer C_S_AXI_DATA_WIDTH = 32
 ) (
-    // Board / fabric clock — FT601 reset sequencer (ft_clk is off in reset)
     input  wire                        clk,
     input  wire                        rst_n,
 
-    // STREAM capture clock (hidden when C_PHY=FT601)
     input  wire                        sample_clk,
     input  wire                        sample_rst_n,
 
-    // User-wired analyzer inputs (width follows C_NUM_CH)
     input  wire [C_NUM_CH-1:0]         probe_i,
 
     output wire [7:0]                  status_o,
 
-    // FT601 pads (hidden from BD wiring; auto-promoted + IP XDC)
     input  wire                        ft_clk,
     inout  wire [31:0]                 ft_data,
     inout  wire [3:0]                  ft_be,
@@ -52,14 +48,12 @@ module pvla #(
     output wire                        ft_reset,
     output wire                        ft_wakeup,
 
-    // STREAM master (shown when C_PHY=STREAM)
     output wire [31:0]                 m_axis_tdata,
     output wire                        m_axis_tvalid,
     input  wire                        m_axis_tready,
     output wire                        m_axis_tlast,
     output wire [3:0]                  m_axis_tkeep,
 
-    // AXI4-Lite (arm / trigger / status). Optional.
     input  wire                        s_axi_aclk,
     input  wire                        s_axi_aresetn,
     input  wire [C_S_AXI_ADDR_WIDTH-1:0] s_axi_awaddr,
@@ -83,12 +77,13 @@ module pvla #(
     input  wire                        s_axi_rready
 );
 
-    // C_BOARD / C_INCLUDE_BR_XDC select which IP XDC is packaged; they
-    // have no RTL effect. Touch them so the GUI parameters survive synth.
+    // C_BOARD / C_INCLUDE_BR_XDC select which IP XDC is packaged.
     (* keep = "true" *) wire unused_cfg = (C_BOARD != 0) ^ (C_INCLUDE_BR_XDC != 0);
 
-    wire cap_clk = (C_PHY == 0) ? ft_clk : sample_clk;
+    wire phy_clk = (C_PHY == 0) ? ft_clk : sample_clk;
+    wire samp_clk = (C_SAMPLE_CLK_SRC != 0) ? sample_clk : phy_clk;
     wire cap_rst;
+    wire samp_rst;
     wire rst_ft;
     wire ft_reset_w;
 
@@ -113,6 +108,8 @@ module pvla #(
             assign ft_wakeup = 1'b1;
         end
     endgenerate
+
+    assign samp_rst = (C_SAMPLE_CLK_SRC != 0) ? ~sample_rst_n : cap_rst;
 
     wire        cmd_valid;
     wire [31:0] cmd_data;
@@ -151,8 +148,8 @@ module pvla #(
                 .s_axi_rresp   (s_axi_rresp),
                 .s_axi_rvalid  (s_axi_rvalid),
                 .s_axi_rready  (s_axi_rready),
-                .cap_clk       (cap_clk),
-                .cap_rst       (cap_rst),
+                .cap_clk       (samp_clk),
+                .cap_rst       (samp_rst),
                 .cmd_valid     (cmd_valid),
                 .cmd_data      (cmd_data),
                 .armed         (armed),
@@ -182,12 +179,18 @@ module pvla #(
         .C_HAS_AXI         (C_HAS_AXI),
         .C_NUM_CH          (C_NUM_CH),
         .C_SAMPLE_MHZ      (C_SAMPLE_MHZ),
+        .C_SAMPLE_DIV      (C_SAMPLE_DIV),
+        .C_SAMPLE_CLK_SRC  (C_SAMPLE_CLK_SRC),
+        .C_INPUT_PATH      (C_INPUT_PATH),
+        .C_PAD_MODE        (C_PAD_MODE),
         .C_PRETRIG_SAMPLES (C_PRETRIG_SAMPLES),
         .C_DEFAULT_POST    (C_DEFAULT_POST),
         .C_DEFAULT_SOURCE  (C_DEFAULT_SOURCE[1:0])
     ) u_cap (
-        .cap_clk         (cap_clk),
+        .cap_clk         (phy_clk),
         .cap_rst         (cap_rst),
+        .samp_clk        (samp_clk),
+        .samp_rst        (samp_rst),
         .probe_i         (probe_i),
         .cmd_valid       (cmd_valid),
         .cmd_data        (cmd_data),
@@ -221,7 +224,7 @@ module pvla #(
     assign status_o[2] = cap_done;
     assign status_o[3] = overflow_sticky;
     assign status_o[4] = fifo_full;
-    assign status_o[5] = (source_sel == 2'd2) || (source_sel == 2'd3);
+    assign status_o[5] = (source_sel == 2'd2);
     assign status_o[6] = tx_active;
     assign status_o[7] = fifo_empty;
 
