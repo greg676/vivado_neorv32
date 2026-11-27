@@ -149,7 +149,10 @@ def main() -> int:
         err("pvla.v must not instantiate NeoRV32")
 
     packer = (IP / "hdl" / "pvla_word_packer.v").read_text()
-    for token in ("g_pack4", "g_pack8", "g_pack16", "word_o", "C_NUM_CH"):
+    for token in (
+        "g_pack4", "g_pack8", "g_pack16", "word_o", "C_NUM_CH",
+        "word_o[31:28]", "word_o[31:24]", "word_o[31:16]",
+    ):
         if token not in packer:
             err(f"pvla_word_packer.v missing {token}")
     if "IDDR" in packer:

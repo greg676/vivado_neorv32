@@ -27,7 +27,7 @@ module pvla_word_packer #(
 
     generate
         if (C_NUM_CH == 4) begin : g_pack4
-            // 8 nibbles / USB word
+            // 8 nibbles / USB word. acc is t+0..t+6; t+7 is word_o[31:28].
             reg [27:0] acc;
             reg [2:0]  fill;
             always @(posedge clk) begin
@@ -49,10 +49,11 @@ module pvla_word_packer #(
                             3'd5: begin acc[23:20] <= sample_i; fill <= 3'd6; end
                             3'd6: begin acc[27:24] <= sample_i; fill <= 3'd7; end
                             default: begin
-                                word_o     <= {sample_i, acc};
-                                word_valid <= 1'b1;
-                                acc        <= 28'h0;
-                                fill       <= 3'd0;
+                                word_o[27:0]  <= acc;
+                                word_o[31:28] <= sample_i;  // t+7 fills DATA[31:28]
+                                word_valid    <= 1'b1;
+                                acc           <= 28'h0;
+                                fill          <= 3'd0;
                             end
                         endcase
                     end
@@ -76,16 +77,17 @@ module pvla_word_packer #(
                             acc  <= sample_i;
                             fill <= 1'b1;
                         end else begin
-                            word_o     <= {sample_i, acc};
-                            word_valid <= 1'b1;
-                            acc        <= 16'h0;
-                            fill       <= 1'b0;
+                            word_o[15:0]  <= acc;
+                            word_o[31:16] <= sample_i;  // t+1 fills DATA[31:16]
+                            word_valid    <= 1'b1;
+                            acc           <= 16'h0;
+                            fill          <= 1'b0;
                         end
                     end
                 end
             end
         end else begin : g_pack8
-            // 4 bytes / USB word (default 8 ch)
+            // 4 bytes / USB word (default 8 ch). acc is t+0..t+2; t+3 is word_o[31:24].
             reg [23:0] acc;
             reg [1:0]  fill;
             always @(posedge clk) begin
@@ -103,10 +105,11 @@ module pvla_word_packer #(
                             2'd1: begin acc[15:8]  <= sample_i; fill <= 2'd2; end
                             2'd2: begin acc[23:16] <= sample_i; fill <= 2'd3; end
                             default: begin
-                                word_o     <= {sample_i, acc};
-                                word_valid <= 1'b1;
-                                acc        <= 24'h0;
-                                fill       <= 2'd0;
+                                word_o[23:0]  <= acc;
+                                word_o[31:24] <= sample_i;  // t+3 fills DATA[31:24]
+                                word_valid    <= 1'b1;
+                                acc           <= 24'h0;
+                                fill          <= 2'd0;
                             end
                         endcase
                     end
