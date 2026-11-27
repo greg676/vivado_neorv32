@@ -44,7 +44,7 @@ create_bd_design pvla_bd
 create_bd_cell -type ip -vlnv greg676:user:pvla:1.0 pvla_0
 set_property -dict [list \
   CONFIG.C_NUM_CH          $pvla_num_ch \
-  CONFIG.C_SAMPLE_MHZ      {100} \
+  CONFIG.C_SAMPLE_MHZ      {200} \
   CONFIG.C_SAMPLE_DIV      {1} \
   CONFIG.C_SAMPLE_CLK_SRC  {0} \
   CONFIG.C_INPUT_PATH      {0} \

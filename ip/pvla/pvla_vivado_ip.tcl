@@ -105,7 +105,7 @@ proc pvla_user_param { name default fmt {min ""} {max ""} } {
 }
 
 pvla_user_param C_NUM_CH          8    long
-pvla_user_param C_SAMPLE_MHZ      100  long
+pvla_user_param C_SAMPLE_MHZ      200  long
 pvla_user_param C_SAMPLE_DIV      1    long
 pvla_user_param C_SAMPLE_CLK_SRC  0    long
 pvla_user_param C_INPUT_PATH      0    long
@@ -133,8 +133,11 @@ set_property value_validation_pairs {{Disabled} 0 {Enabled} 1} [ipx::get_user_pa
 set_property value_validation_type pairs [ipx::get_user_parameters C_INCLUDE_BR_XDC -of_objects [ipx::current_core]]
 set_property value_validation_pairs {{No (user-wired)} 0 {Yes (Br Bank A)} 1} [ipx::get_user_parameters C_INCLUDE_BR_XDC -of_objects [ipx::current_core]]
 
+set_property value_validation_type pairs [ipx::get_user_parameters C_SAMPLE_MHZ -of_objects [ipx::current_core]]
+set_property value_validation_pairs {{100 MS/s (16ch)} 100 {200 MS/s (8ch)} 200 {400 MS/s (4ch)} 400} [ipx::get_user_parameters C_SAMPLE_MHZ -of_objects [ipx::current_core]]
+
 set_property value_validation_type pairs [ipx::get_user_parameters C_SAMPLE_DIV -of_objects [ipx::current_core]]
-set_property value_validation_pairs {{1 (full rate)} 1 {2} 2 {4} 4 {8} 8} [ipx::get_user_parameters C_SAMPLE_DIV -of_objects [ipx::current_core]]
+set_property value_validation_pairs {{1 (50 Mword/s USB)} 1 {2} 2 {4} 4 {8} 8} [ipx::get_user_parameters C_SAMPLE_DIV -of_objects [ipx::current_core]]
 
 set_property value_validation_type pairs [ipx::get_user_parameters C_SAMPLE_CLK_SRC -of_objects [ipx::current_core]]
 set_property value_validation_pairs {{FT601 100 MHz} 0 {External sample_clk} 1} [ipx::get_user_parameters C_SAMPLE_CLK_SRC -of_objects [ipx::current_core]]
@@ -221,7 +224,7 @@ proc setup_ip_gui {} {
 
   set page [ipgui::add_page -name {General} -component [ipx::current_core] -display_name {General}]
   ipgui::add_static_text -name {About} -component [ipx::current_core] -parent $page \
-    -text {PVLA packs 4/8/16 channels into 32-bit FT601 USB words. Default: Au V2, internal counter, IOBUF 245, TX-only host IN. Sample rate = C_SAMPLE_MHZ / C_SAMPLE_DIV. USB Mword/s = sample_MHz / (32/C_NUM_CH) and must be <= 100. 4 KiB WR-after-TXE. No DDR3. No NeoRV32.}
+    -text {PVLA packs 4/8/16 channels into 32-bit FT601 USB words. Safe advertised rates: 400/200/100 MS/s (4/8/16 ch) = 50 Mword/s USB. Not 800/400/200. Default: Au V2, internal counter, IOBUF 245, TX-only host IN. 4 KiB WR-after-TXE. No DDR3. No NeoRV32.}
 
   set g [ipgui::add_group -name {Capture} -component [ipx::current_core] -parent $page -display_name {Capture}]
   foreach n {C_NUM_CH C_INPUT_PATH C_DEFAULT_SOURCE C_PRETRIG_SAMPLES C_DEFAULT_POST} {
@@ -238,10 +241,10 @@ proc setup_ip_gui {} {
     ipgui::add_param -name $n -component [ipx::current_core] -parent $g
   }
   ipgui::add_static_text -name {RateMath} -component [ipx::current_core] -parent $g \
-    -text {samples/word = 32/C_NUM_CH. usb_Mword/s = (C_SAMPLE_MHZ/C_SAMPLE_DIV)/samples_per_word. 8ch @ 100 MS/s -> 25 Mword/s USB.}
+    -text {C_SAMPLE_MHZ follows C_NUM_CH: 4ch=400, 8ch=200, 16ch=100. usb_Mword/s = C_SAMPLE_MHZ / (32/C_NUM_CH) / C_SAMPLE_DIV. Default div=1 -> 50 Mword/s USB. Not 800/400/200 (100 Mword/s bench fill).}
   set_param_properties C_SAMPLE_CLK_SRC {Sample clock} {FT601 100 MHz ft_clk or external sample_clk.}
-  set_param_properties C_SAMPLE_MHZ {Sample clock (MHz)} {ft_clk is 100. Used with the divider for the rate math.}
-  set_param_properties C_SAMPLE_DIV {Sample divider} {1/2/4/8. Rate = C_SAMPLE_MHZ / div.}
+  set_param_properties C_SAMPLE_MHZ {Advertised sample rate} {Safe set: 400/200/100 MS/s for 4/8/16 ch = 50 Mword/s USB. Not 800/400/200.} {} {$C_NUM_CH == 4 ? 400 : ($C_NUM_CH == 16 ? 100 : 200)}
+  set_param_properties C_SAMPLE_DIV {Sample divider} {Extra 1/2/4/8 from the advertised rate. Default 1 keeps 50 Mword/s USB.}
 
   set g [ipgui::add_group -name {PHY} -component [ipx::current_core] -parent $page -display_name {PHY and board}]
   foreach n {C_PHY C_BOARD C_PAD_MODE C_INCLUDE_BR_XDC} {
@@ -264,7 +267,7 @@ set bd_grp [ipx::add_file_group -type {block_diagram_automation} {} [ipx::curren
 ipx::add_file bd/bd.tcl [ipx::get_file_groups xilinx_blockdiagramautomation -of_objects [ipx::current_core]]
 
 set_property previous_version_for_upgrade greg676:user:pvla:1.0 [ipx::current_core]
-set_property core_revision 3 [ipx::current_core]
+set_property core_revision 4 [ipx::current_core]
 
 ipx::create_xgui_files [ipx::current_core]
 ipx::update_checksums [ipx::current_core]

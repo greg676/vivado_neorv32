@@ -67,12 +67,15 @@ def main() -> int:
     # Partial last group is not emitted (packer waits for a full word).
     check("8ch partial", pack_words(8, [1, 2, 3]), [])
 
-    # Rate math vs FT601 100 MHz 32-bit
-    check("8ch 100/1 usb", usb_mword(100, 8, 1), 25.0)
-    check("4ch 100/1 usb", usb_mword(100, 4, 1), 12.5)
-    check("16ch 100/1 usb", usb_mword(100, 16, 1), 50.0)
-    if usb_mword(100, 8, 1) > 100:
-        errors.append("8ch @ 100 MS/s must fit in 100 Mword/s FT601")
+    # Safe advertised set: 400/200/100 MS/s (4/8/16) = 50 Mword/s USB.
+    # 800/400/200 would be one packed word per ft_clk (100 Mword/s bench fill).
+    check("4ch 400 advertised", usb_mword(400, 4, 1), 50.0)
+    check("8ch 200 advertised", usb_mword(200, 8, 1), 50.0)
+    check("16ch 100 advertised", usb_mword(100, 16, 1), 50.0)
+    check("8ch div=2", usb_mword(200, 8, 2), 25.0)
+    check("8ch 400 is bench fill", usb_mword(400, 8, 1), 100.0)
+    if usb_mword(200, 8, 1) > 50.0001:
+        errors.append("8ch advertised 200 MS/s must be 50 Mword/s USB, not 100")
 
     if errors:
         print("pvla_word_packer golden FAILED:")
@@ -83,7 +86,7 @@ def main() -> int:
     print("  4 ch: 8 samples/word  [3:0]=t+0 ... [31:28]=t+7")
     print("  8 ch: 4 samples/word  [7:0]=t+0 ... [31:24]=t+3")
     print("  16ch: 2 samples/word  [15:0]=t+0 ... [31:16]=t+1")
-    print("  8ch @ 100 MS/s -> 25 Mword/s USB (<= 100 MHz ft_clk)")
+    print("  advertised 400/200/100 MS/s (4/8/16 ch) -> 50 Mword/s USB")
     return 0
 
 

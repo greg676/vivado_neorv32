@@ -590,7 +590,7 @@
       </spirit:modelParameter>
       <spirit:modelParameter spirit:dataType="integer">
         <spirit:name>C_SAMPLE_MHZ</spirit:name>
-        <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.C_SAMPLE_MHZ">100</spirit:value>
+        <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.C_SAMPLE_MHZ">200</spirit:value>
       </spirit:modelParameter>
       <spirit:modelParameter spirit:dataType="integer">
         <spirit:name>C_SAMPLE_DIV</spirit:name>
@@ -670,8 +670,14 @@
       <spirit:enumeration spirit:text="16 ch (2 samples/word)">16</spirit:enumeration>
     </spirit:choice>
     <spirit:choice>
+      <spirit:name>choice_list_mhz</spirit:name>
+      <spirit:enumeration spirit:text="100 MS/s (16ch)">100</spirit:enumeration>
+      <spirit:enumeration spirit:text="200 MS/s (8ch)">200</spirit:enumeration>
+      <spirit:enumeration spirit:text="400 MS/s (4ch)">400</spirit:enumeration>
+    </spirit:choice>
+    <spirit:choice>
       <spirit:name>choice_list_div</spirit:name>
-      <spirit:enumeration spirit:text="1 (full rate)">1</spirit:enumeration>
+      <spirit:enumeration spirit:text="1 (50 Mword/s USB)">1</spirit:enumeration>
       <spirit:enumeration spirit:text="2">2</spirit:enumeration>
       <spirit:enumeration spirit:text="4">4</spirit:enumeration>
       <spirit:enumeration spirit:text="8">8</spirit:enumeration>
@@ -802,8 +808,8 @@
     </spirit:parameter>
     <spirit:parameter>
       <spirit:name>C_SAMPLE_MHZ</spirit:name>
-      <spirit:displayName>Sample clock (MHz)</spirit:displayName>
-      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.C_SAMPLE_MHZ">100</spirit:value>
+      <spirit:displayName>Advertised sample rate</spirit:displayName>
+      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.C_SAMPLE_MHZ" spirit:choiceRef="choice_list_mhz">200</spirit:value>
     </spirit:parameter>
     <spirit:parameter>
       <spirit:name>C_SAMPLE_DIV</spirit:name>
@@ -883,7 +889,7 @@
       </xilinx:taxonomies>
       <xilinx:displayName>PVLA</xilinx:displayName>
       <xilinx:vendorDisplayName>greg676</xilinx:vendorDisplayName>
-      <xilinx:coreRevision>3</xilinx:coreRevision>
+      <xilinx:coreRevision>4</xilinx:coreRevision>
       <xilinx:upgrades>
         <xilinx:canUpgradeFrom>greg676:user:pvla:1.0</xilinx:canUpgradeFrom>
       </xilinx:upgrades>

@@ -34,8 +34,8 @@ RTL: `hdl/pvla_word_packer.v` (generate mux/shift, not hidden in the PHY).
 | `C_INPUT_PATH` | Internal | Internal fabric **or** external pins (not mixed) |
 | `C_DEFAULT_SOURCE` | Counter | Counter / walking-one / BD `probe_i` (internal path only) |
 | `C_SAMPLE_CLK_SRC` | FT601 100 MHz | `ft_clk` or external `sample_clk` |
-| `C_SAMPLE_MHZ` | 100 | Frequency of that clock (FT601 is 100) |
-| `C_SAMPLE_DIV` | 1 | 1 / 2 / 4 / 8. Sample rate = MHz / div |
+| `C_SAMPLE_MHZ` | **200** (8 ch) | Advertised MS/s: **400 / 200 / 100** for 4 / 8 / 16 ch (50 Mword/s USB). Not 800/400/200. |
+| `C_SAMPLE_DIV` | 1 | Extra 1 / 2 / 4 / 8. Default 1 keeps 50 Mword/s USB |
 | `C_PAD_MODE` | IOBUF 245 | IOBUF (default) or ALWAYS_DRIVE |
 | `C_PHY` | FT601 | STREAM exposes `m_axis_*` |
 | `C_BOARD` | **AU_V2** | PT_ALPHA / PT_V2 / AU_V2 Ft+ XDC |
@@ -43,7 +43,7 @@ RTL: `hdl/pvla_word_packer.v` (generate mux/shift, not hidden in the PHY).
 | `C_PRETRIG_SAMPLES` | 4096 | BRAM depth, power of two. Not DDR3. |
 | `C_INCLUDE_BR_XDC` | No | Optional Br Bank A `probe_i` pins (Pt) |
 
-Rate math: `usb_Mword/s = (C_SAMPLE_MHZ / C_SAMPLE_DIV) / (32 / C_NUM_CH)`. Must be ≤ 100 (FT601 `ft_clk`). Example: 8 ch @ 100 MS/s → **25 Mword/s** USB.
+Rate math: `usb_Mword/s = C_SAMPLE_MHZ / (32 / C_NUM_CH) / C_SAMPLE_DIV`. Advertised **400 / 200 / 100 MS/s** (4 / 8 / 16 ch) at div=1 is **50 Mword/s** USB. Do not advertise 800 / 400 / 200 (one packed word per `ft_clk`, 100 Mword/s bench fill).
 
 ## Ports
 

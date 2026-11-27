@@ -6,7 +6,7 @@ proc init_gui { IPINST } {
 
   set page [ipgui::add_page $IPINST -name "General" -display_name {General}]
   ipgui::add_static_text $IPINST -name About -parent $page \
-    -text {PVLA packs 4/8/16 channels into 32-bit FT601 USB words (N samples/word). Default: Au V2, internal counter, IOBUF 245 pads, TX-only host IN. FT601 is 100 MHz 32-bit. Sample rate = C_SAMPLE_MHZ / C_SAMPLE_DIV. USB Mword/s = sample_MHz / (32/C_NUM_CH). 4 KiB WR-after-TXE ping-pong. No DDR3. No NeoRV32.}
+    -text {PVLA packs 4/8/16 channels into 32-bit FT601 USB words (N samples/word). Safe advertised rates: 400/200/100 MS/s (4/8/16 ch) = 50 Mword/s USB. Not 800/400/200 (one word per ft_clk). Default: Au V2, internal counter, IOBUF 245, TX-only host IN. 4 KiB WR-after-TXE. No DDR3. No NeoRV32.}
 
   set ch [ipgui::add_group $IPINST -name {Capture} -parent $page -display_name {Capture}]
   ipgui::add_param $IPINST -name "C_NUM_CH" -parent $ch
@@ -20,7 +20,7 @@ proc init_gui { IPINST } {
   ipgui::add_param $IPINST -name "C_SAMPLE_MHZ" -parent $clk
   ipgui::add_param $IPINST -name "C_SAMPLE_DIV" -parent $clk
   ipgui::add_static_text $IPINST -name RateMath -parent $clk \
-    -text {samples/word = 32/C_NUM_CH (4ch:8, 8ch:4, 16ch:2). usb_Mword/s = (C_SAMPLE_MHZ/C_SAMPLE_DIV) / samples_per_word. Must be <= 100 (FT601 ft_clk). 8ch @ 100 MS/s -> 25 Mword/s.}
+    -text {Advertised C_SAMPLE_MHZ follows C_NUM_CH: 4ch=400, 8ch=200, 16ch=100 MS/s. usb_Mword/s = C_SAMPLE_MHZ / (32/C_NUM_CH) / C_SAMPLE_DIV. Default div=1 -> 50 Mword/s USB. Do not advertise 800/400/200 (100 Mword/s bench fill).}
 
   set phy [ipgui::add_group $IPINST -name {PHY} -parent $page -display_name {PHY and board}]
   ipgui::add_param $IPINST -name "C_PHY" -parent $phy
@@ -39,10 +39,10 @@ proc init_gui { IPINST } {
   set_property tooltip {Counter / walking-one / BD probe_i. Ignored when Input path = External.} [ipgui::get_guiparamspec -name C_DEFAULT_SOURCE -component $IPINST]
   set_property display_name {Sample clock} [ipgui::get_guiparamspec -name C_SAMPLE_CLK_SRC -component $IPINST]
   set_property tooltip {FT601 100 MHz ft_clk (default) or an external sample_clk. Keep related unless you add an async FIFO.} [ipgui::get_guiparamspec -name C_SAMPLE_CLK_SRC -component $IPINST]
-  set_property display_name {Sample clock (MHz)} [ipgui::get_guiparamspec -name C_SAMPLE_MHZ -component $IPINST]
-  set_property tooltip {Frequency of the selected sample clock. FT601 ft_clk is 100. Used with C_SAMPLE_DIV for the GUI rate math.} [ipgui::get_guiparamspec -name C_SAMPLE_MHZ -component $IPINST]
+  set_property display_name {Advertised sample rate} [ipgui::get_guiparamspec -name C_SAMPLE_MHZ -component $IPINST]
+  set_property tooltip {Safe set: 400/200/100 MS/s for 4/8/16 ch = 50 Mword/s USB. Tracks C_NUM_CH. Not 800/400/200 (one packed word per ft_clk).} [ipgui::get_guiparamspec -name C_SAMPLE_MHZ -component $IPINST]
   set_property display_name {Sample divider} [ipgui::get_guiparamspec -name C_SAMPLE_DIV -component $IPINST]
-  set_property tooltip {One sample every C_SAMPLE_DIV clocks of the sample clock. 1/2/4/8. Rate = C_SAMPLE_MHZ / div.} [ipgui::get_guiparamspec -name C_SAMPLE_DIV -component $IPINST]
+  set_property tooltip {Extra 1/2/4/8 from the advertised rate. Default 1 keeps 50 Mword/s USB.} [ipgui::get_guiparamspec -name C_SAMPLE_DIV -component $IPINST]
   set_property display_name {Pre-trigger BRAM depth} [ipgui::get_guiparamspec -name C_PRETRIG_SAMPLES -component $IPINST]
   set_property tooltip {Circular BRAM entries. Power of two. Not DDR3. Live path dumps in 4 KiB PHY bursts.} [ipgui::get_guiparamspec -name C_PRETRIG_SAMPLES -component $IPINST]
   set_property display_name {Default post-trigger samples} [ipgui::get_guiparamspec -name C_DEFAULT_POST -component $IPINST]
@@ -65,10 +65,19 @@ proc validate_PARAM_VALUE.C_NUM_CH { PARAM_VALUE.C_NUM_CH } {
   return true
 }
 
-proc update_PARAM_VALUE.C_SAMPLE_MHZ { PARAM_VALUE.C_SAMPLE_MHZ } {}
+proc update_PARAM_VALUE.C_SAMPLE_MHZ { PARAM_VALUE.C_SAMPLE_MHZ PARAM_VALUE.C_NUM_CH } {
+  set ch [get_property value ${PARAM_VALUE.C_NUM_CH}]
+  if {$ch == 4} {
+    set_property value 400 ${PARAM_VALUE.C_SAMPLE_MHZ}
+  } elseif {$ch == 16} {
+    set_property value 100 ${PARAM_VALUE.C_SAMPLE_MHZ}
+  } else {
+    set_property value 200 ${PARAM_VALUE.C_SAMPLE_MHZ}
+  }
+}
 proc validate_PARAM_VALUE.C_SAMPLE_MHZ { PARAM_VALUE.C_SAMPLE_MHZ } {
   set v [get_property value ${PARAM_VALUE.C_SAMPLE_MHZ}]
-  if {$v < 1 || $v > 200} { return false }
+  if {$v != 100 && $v != 200 && $v != 400} { return false }
   return true
 }
 

@@ -134,6 +134,8 @@ def main() -> int:
             and "parameter integer C_BOARD = 2" not in top:
         if "C_BOARD           = 2" not in top:
             err("pvla.v default C_BOARD should be AU_V2 (2)")
+    if "C_SAMPLE_MHZ      = 200" not in top and "C_SAMPLE_MHZ = 200" not in top:
+        err("pvla.v default C_SAMPLE_MHZ should be 200 (8ch advertised, 50 Mword/s USB)")
     if "probe_i" not in top:
         err("pvla.v missing probe_i")
     if "s_axi_awaddr" not in top:
@@ -194,6 +196,8 @@ def main() -> int:
         "alchitry-au-v2/rtl/ft601/ft601_sync_fifo.v",
         "hdl/pvla_word_packer.v", "hdl/pvla_internal_src.v",
         "4 ch (8 samples/word)", "IOBUF 245",
+        "400 MS/s (4ch)", "200 MS/s (8ch)", "100 MS/s (16ch)",
+        "50 Mword/s USB",
     ):
         if token not in xml:
             err(f"component.xml missing {token!r}")
@@ -208,6 +212,7 @@ def main() -> int:
     for token in (
         "C_NUM_CH", "C_PHY", "C_BOARD", "C_INPUT_PATH", "C_PAD_MODE",
         "C_SAMPLE_DIV", "C_SAMPLE_CLK_SRC", "init_gui", "usb_Mword",
+        "400/200/100", "50 Mword/s",
     ):
         if token not in gui:
             err(f"xgui missing {token}")
@@ -225,6 +230,8 @@ def main() -> int:
         err("packager must include the visible word packer")
     if "C_PAD_MODE" not in pkg:
         err("packager GUI must offer C_PAD_MODE (IOBUF vs ALWAYS_DRIVE)")
+    if "400/200/100" not in pkg and "400 MS/s" not in pkg:
+        err("packager GUI must advertise 400/200/100 MS/s, not 800/400/200")
 
     for example_path in (
         PLAT / "tcl" / "pvla_bd_example.tcl",

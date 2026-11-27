@@ -14,7 +14,7 @@ module pvla_capture #(
     parameter integer C_PHY             = 0,
     parameter integer C_HAS_AXI         = 0,
     parameter integer C_NUM_CH          = 8,
-    parameter integer C_SAMPLE_MHZ      = 100,
+    parameter integer C_SAMPLE_MHZ      = 200,
     parameter integer C_SAMPLE_DIV      = 1,
     parameter integer C_SAMPLE_CLK_SRC  = 0,
     parameter integer C_INPUT_PATH      = 0,
