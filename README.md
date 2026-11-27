@@ -1,269 +1,103 @@
-# LOOM — Multitrack Audio Weaving on FPGA
+# PVLA — fabric logic analyzer over FT601
 
-**A unified AI-assisted hardware development system**
+**Repo:** [https://github.com/greg676/vivado_neorv32](https://github.com/greg676/vivado_neorv32)
 
-This repository contains three interconnected projects that together form a complete audio development platform:
+Vivado IP that samples 1–8 LVCMOS33 probes in the FPGA and streams them to **PulseView** (libsigrok). First PHY is the Alchitry **Ft+** FT601 SuperSpeed FIFO. This is not AMD ILA / Vivado Hardware Manager.
 
-1. **LOOM** — Multitrack recorder/dubber with software-defined DSP
-2. **Alchitry Platinum V2** — Hardware platform (FPGA + FT601 USB3.0)
-3. **ADS+MCP** — AI Design Studio with Model Context Protocol tooling
+Working RTL lives in open PRs **#16–#25** (there is no #21). `main` still has the older NeoRV32 / LOOM tree.
 
----
+## Status (Au, live)
 
-## 🎯 What This Is
+Alchitry **Au** `xc7a35t` + Ft+ V2 on **jetson-edge**. SRAM reload only. **No QSPI.** SuperSpeed `0403:601f` @ 5000M. Overlapped D3XX IN.
 
-LOOM is a **standalone hardware multitrack recorder and live source-separation engine** for musicians, built on a single FPGA. No computer. No DAW. You plug in mics and speakers, interact via touchscreen, and the FPGA fabric does real-time multitrack recording, mixing, effects, and — the signature feature — decodes individual instruments out of a stereo room mic onto separate tracks.
+| Path | Rate | vs 381.47 MiB/s theoretical |
+|---|---:|---:|
+| Capture IN **sink** ([#24](https://github.com/greg676/vivado_neorv32/pull/24)) | **335 MiB/s** | 88% |
+| Capture IN **verified** packed counter | **257 MiB/s** | 67% (`words_ok` consecutive, 0 bad) |
+| TX-only sink (USB ceiling, [#23](https://github.com/greg676/vivado_neorv32/pull/23)) | 335 MiB/s | 88% |
 
-### The Three Pillars
+32-bit × 100 MHz `ft_clk` = 400 MB/s = **381.47 MiB/s**. Remaining verify-vs-sink gap is Jetson memcpy, not the FPGA packer.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    LOOM SYSTEM                                  │
-├───────────────┬───────────────────┬───────────────────────────┤
-│               │                   │                           │
-│  LOOM         │  Alchitry Pt V2   │  ADS+MCP                  │
-│  Application  │  Hardware Platform│  AI Infrastructure        │
-│               │                   │                           │
-│  • Multitrack │  • XC7A100T      │  • Open WebUI             │
-│    recording  │    FPGA          │  • MCP servers            │
-│  • Real-time  │  • CS42448       │  • Hardware debug tools    │
-│    DSP        │    8ch codec     │  • GitHub integration      │
-│  • Source     │  • DDR3 256MB    │                           │
-│    separation │  • FT601 USB3.0  │                           │
-│  • Touch UI   │  • NeoRV32 RISC-V│                           │
-│               │                   │                           │
-└───────────────┴───────────────────┴───────────────────────────┘
-```
+![PulseView 0.4.2: 8-bit packed counter from Au SRAM capture (D0 fastest … D7 slowest)](media/pulseview-counter.png)
 
----
+PulseView **0.4.2** / sigrok-cli **0.7.2** open the host `.sr` ([#19](https://github.com/greg676/vivado_neorv32/pull/19)). Simulated LAT3 → `.sr` is [#6](https://github.com/greg676/vivado_neorv32/pull/6).
 
-## 📁 Repository Structure
+## Hardware sandwich (stock)
 
 ```
-loom/
-├── README.md                          # This file
-├── LICENSE                            # Project license
-├── PROJECT-STATUS.md                  # Current build state
-│
-├── applications/
-│   └── loom/                          # The multitrack application
-│       ├── docs/
-│       │   ├── LOOM_by_opus48.md     # Master architecture doc
-│       │   ├── 00-VISION.md          # Product vision
-│       │   ├── 01-PRODUCT-SPEC.md    # Specifications
-│       │   ├── 02-SYSTEM-ARCH.md     # System architecture
-│       │   ├── 03-FPGA-AUDIO.md      # Audio fabric design
-│       │   ├── 04-DSP-LIBRARY.md     # DSP modules
-│       │   ├── 05-SEPARATOR.md      # Instrument separation
-│       │   ├── 06-CONTROL.md         # Control plane
-│       │   ├── 07-GUI-DISPLAY.md     # Touchscreen UI
-│       │   ├── 08-STORAGE.md         # Recording/storage
-│       │   ├── 09-RESOURCES.md       # Resource budget
-│       │   ├── 10-STRUCTURE.md       # Project structure
-│       │   └── 11-BUILD-PLAN.md      # Implementation plan
-│       ├── expanded/                  # AI-expanded design docs
-│       ├── rtl/                       # LOOM-specific Verilog
-│       └── firmware/                  # LOOM firmware (neorv32)
-│
-├── platforms/
-│   └── alchitry-platinum-v2/          # Hardware platform
-│       ├── rtl/                       # NeoRV32 + peripherals
-│       ├── constraints/               # XDC pin definitions
-│       ├── firmware/                  # Boot firmware
-│       │   ├── debug_console/         # Interactive debug shell
-│       │   └── rp2040_passthrough/    # USB UART bridge
-│       ├── doc/                       # Hardware docs
-│       │   ├── HARDWARE-DEBUG-RULES.md
-│       │   ├── PINOUT.md
-│       │   └── MCP-INTEGRATION.md
-│       ├── bd/                        # Vivado block designs
-│       ├── neorv32_core/              # NeoRV32 RTL
-│       ├── tcl/                       # Build scripts
-│       └── scripts/                   # Automation
-│           ├── save-to-github.sh      # Formal commit workflow
-│           ├── flash-firmware.sh      # J-Link programming
-│           └── test-uart.py          # UART test
-│
-├── infrastructure/
-│   └── ads-mcp/                       # AI tooling
-│       ├── docs/
-│       │   └── ADS+MCP_by_opus48.md   # Master architecture
-│       ├── mcp-servers/               # MCP tool implementations
-│       │   ├── hardware-debug/        # UART/JTAG debug tools
-│       │   ├── r7-filesystem/         # File access
-│       │   ├── github-project/        # Git integration
-│       │   └── browser-puppeteer/     # Web automation
-│       └── profiles/                  # Project profiles
-│           └── project.profile.json   # Active configuration
-│
-└── codebot-workspace/                 # Synced AI sessions
-    └── ...                            # From codecbot agent
+Ft+ FT601Q  → USB 3 host
+        │  top connector
+FPGA (Au xc7a35t  or  Pt V2 XC7A100T + DDR3)
+        │  bottom connector
+Br (or later LA input board)
 ```
 
----
+Ft+ stays on top. Bottom is the instrument. **SRAM / RAM bitstream only** — never `--write-flash`, `.mcs`, or QSPI.
 
-## 🚀 Quick Start
+## Where to start
 
-### Prerequisites
+| You want | Open |
+|---|---|
+| Proven Au PHY + 335 MiB/s capture | [#24](https://github.com/greg676/vivado_neorv32/pull/24) · tree [`platforms/alchitry-au-v2/`](https://github.com/greg676/vivado_neorv32/blob/cursor/au-packer-fwft-f2d0/platforms/alchitry-au-v2/README.md) |
+| PulseView `.sr` from live IN | [#19](https://github.com/greg676/vivado_neorv32/pull/19) |
+| PVLA catalog IP (`greg676:user:pvla:1.0`) | [#20](https://github.com/greg676/vivado_neorv32/pull/20) · [`ip/pvla/`](https://github.com/greg676/vivado_neorv32/blob/cursor/pvla-bd-ip-a9a6/ip/pvla/README.md) |
+| Pt 256 MB DDR3 capture buffer | **[#25](https://github.com/greg676/vivado_neorv32/pull/25)** · `pvla_mig7_top` (Pt only; Au has no DDR) |
+| NeoRV32 SoC (unchanged) | [`platforms/alchitry-platinum-v2/README.md`](platforms/alchitry-platinum-v2/README.md) |
 
-- **Alchitry Platinum V2** with FT601 add-on board
-- **SEGGER J-Link** for RISC-V debugging
-- **Xilinx Vivado** 2023.2+ for FPGA synthesis
-- **RISC-V GCC** toolchain
-- **Python 3.12+** with pyserial
-
-### 1. Connect Hardware
-
-The Alchitry Pt V2 exposes:
-- **FT2232H** → `/dev/ttyUSB0` @ 19200 baud (NeoRV32 console)
-- **FT601 USB3.0** → High-speed data (future: audio streaming)
-- **J-Link** → RISC-V debug and firmware loading
-
-### 2. Flash Boot Firmware
+Checkout the Au packer branch for the working instrument:
 
 ```bash
-cd platforms/alchitry-platinum-v2/firmware/debug_console
-make clean && make exe
-../../scripts/flash-firmware.sh
+git clone https://github.com/greg676/vivado_neorv32.git
+cd vivado_neorv32
+git checkout cursor/au-packer-fwft-f2d0   # PR #24
 ```
 
-### 3. Connect Debug Console
+SRAM load (Au). Confirm `idcode` `0x362d093` / xc7a35 **every** reload:
 
 ```bash
-screen /dev/ttyUSB0 19200
-# or
-python3 platforms/alchitry-platinum-v2/scripts/test-uart.py
+openFPGALoader --fpga-part xc7a35tftg256 --write-sram \
+    platforms/alchitry-au-v2/bitstreams/la_capture_top_v2.bit
+# then overlapped D3XX IN, or write a PulseView .sr:
+# python3 platforms/alchitry-au-v2/host/ft601-capture/ft601_capture.py \
+#     --backend d3xx --bytes 16384 --chunk-bytes 4096 --sr /tmp/au-la.sr
+# pulseview -c -D -i /tmp/au-la.sr
 ```
 
-### 4. Interactive Commands
+Do **not** load a Pt `xc7a100t` bitstream onto Au.
 
-```
-sys                  — System info (100 MHz, 128KB IMEM/DMEM)
-i2c probe            — Scan I²C (CS42448 @ 0x4A)
-codec init           — Initialize codec for TDM
-clk on|off           — Enable 12.288 MHz MCLK
-gpio dump            — Show GPIO states
-help                 — Full command list
-```
+## PRs 16–25
 
----
+Au stack (SRAM, no NeoRV32, no QSPI):
 
-## 🔧 Hardware Architecture
+| PR | What |
+|---|---|
+| [#16](https://github.com/greg676/vivado_neorv32/pull/16) | Au V2 + Ft+ 245 loopback (`xc7a35t`, SRAM) |
+| [#17](https://github.com/greg676/vivado_neorv32/pull/17) | TX-only vs RX-only isolation |
+| [#18](https://github.com/greg676/vivado_neorv32/pull/18) | Lucid WR / DATA IOB phasing (working PHY) |
+| [#19](https://github.com/greg676/vivado_neorv32/pull/19) | 4 KiB TX bursts → PulseView `.sr` |
+| [#20](https://github.com/greg676/vivado_neorv32/pull/20) | PVLA Vivado BD IP on that PHY |
+| [#22](https://github.com/greg676/vivado_neorv32/pull/22) | Dual 4 KiB BRAM in front of the PHY |
+| [#23](https://github.com/greg676/vivado_neorv32/pull/23) | Overlapped D3XX IN (256 KiB–1 MiB URBs) |
+| [#24](https://github.com/greg676/vivado_neorv32/pull/24) | FIFO36 FWFT packer — capture IN **335 MiB/s** |
 
-### Alchitry Platinum V2 + FT601 Add-on
+Platinum DDR3 (separate top, still no CPU rewrite):
 
-| Component | Specification | Notes |
-|-----------|---------------|-------|
-| FPGA | Xilinx XC7A100T | Artix-7, 100T package |
-| Logic Cells | 101,440 | ~15% for LOOM v1 |
-| BRAM | 4.86 Mb | Audio buffers, coefficient tables |
-| DSP48 | 240 | Time-multiplexed for all channels |
-| DDR3 | 256 MB | MIG controller @ 100 MHz |
-| Codec | CS42448 | 8ch TDM, I²C control |
-| USB 3.0 | FT601 | Future: audio streaming to host |
-| Display | 2.4" SPI TFT | 320×240, touch + stylus |
-| MCU | NeoRV32 RISC-V | Soft-core @ 100 MHz |
+| PR | What |
+|---|---|
+| **[#25](https://github.com/greg676/vivado_neorv32/pull/25)** | **Pt-only** `pvla_mig7_top`: MIG7 **256 MB** @ `0x20000000` in front of the same 4 KiB FT601 PHY. Catalog PVLA stays BRAM. Au unchanged (no DDR). SRAM / RAM bitstream only. |
 
-### Clock Tree
+Earlier Pt loopback / sampler / PulseView-sim / catalog work is [#1](https://github.com/greg676/vivado_neorv32/pull/1)–[#8](https://github.com/greg676/vivado_neorv32/pull/8). Use the Au PHY (#18+) for silicon.
 
-| Clock | Frequency | Source | Purpose |
-|-------|-----------|--------|---------|
-| CPU | 100 MHz | MIG ui_clk | NeoRV32, control plane |
-| MCLK | 12.288 MHz | MMCM | Codec master clock |
-| SCLK | 3.072 MHz | Derived | TDM bit clock (48k × 64) |
-| LRCLK | 48 kHz | Derived | TDM frame sync |
+## SRAM, not QSPI
 
----
+Every Au and Pt LA load in this work is **RAM**: `openFPGALoader --write-sram` or Vivado `program_ram`. No `write_cfgmem`, no `.mcs`, no flash. Reload SRAM for each test.
 
-## 🤖 AI Integration (ADS+MCP)
+## NeoRV32 is not rewritten
 
-The **AI Design Studio** enables natural-language hardware debugging through **Model Context Protocol** tools:
+The RISC-V SoC, debug console, and Platinum platform README stay as they are. LA / FT601 / PVLA tops **do not instantiate NeoRV32**. Pt DDR3 (#25) is a fabric AXI master + MIG, no CPU in the BD.
 
-### MCP Servers
+## Also in this repo
 
-| Server | Tools | Purpose |
-|--------|-------|---------|
-| **hardware-debug** | `hw.i2c_scan`, `hw.codec_dump`, `hw.uart_terminal` | Direct hardware access |
-| **r7-filesystem** | `fs.read`, `fs.write`, `fs.tree` | File operations |
-| **github-project** | `gh.issues`, `gh.prs`, `gh.commit` | Git integration |
-| **browser-puppeteer** | `browser.screenshot`, `browser.navigate` | Web automation |
-
-### Safety Architecture
-
-```
-Tier 0 (SAFE)      → Read-only, always allowed
-Tier 1 (DEBUG)     → Writes require DEBUG_MODE unlock + confirmation
-Tier 2 (DANGEROUS) → Flash writes, requires explicit DANGEROUS_MODE
-```
-
-### Example Session
-
-```
-User: "Check if the codec is responding"
-AI:   hw.i2c_scan() → Finds CS42448 at 0x4A
-      hw.codec_dump_registers() → Reads all registers
-      
-User: "Initialize it for TDM mode"
-AI:   hw.enable_debug_mode() → Confirms with user
-      hw.codec_apply_known_good() → Applies validated config
-```
-
----
-
-## 📝 Development Workflow
-
-### AI Agent Sessions
-
-Development happens in `~/.openclaw-codecbot/workspaces/codecbot/`, then formally committed:
-
-```bash
-# After productive session:
-./platforms/alchitry-platinum-v2/scripts/save-to-github.sh \
-    "feat: implemented TDM clock validation"
-
-# This:
-# 1. Syncs agent workspace → codebot-workspace/
-# 2. Stages all changes
-# 3. Shows diff stats
-# 4. Commits with message
-# 5. Pushes to GitHub
-```
-
-### Commit Discipline
-
-- **Main branch** always deployable
-- **Conventional commits**: `feat:`, `fix:`, `docs:`, `refactor:`
-- **Diff is review**: Check `git diff --cached` before commit
-- **History immutable**: Never force-push
-
----
-
-## 📜 Project Status
-
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Hardware Platform | ✅ Working | NeoRV32 v29, codec responding |
-| Debug Console | ✅ Working | UART, I²C, GPIO commands |
-| MCP Tools | ⚠️ Partial | Server running, needs parameter fix |
-| LOOM Application | 🚧 Design | Architecture complete, RTL pending |
-| FT601 Integration | 📋 Planned | USB3.0 audio streaming |
-| DSP Engine | 📋 Planned | Time-multiplexed MAC |
-
----
-
-## 🔗 Documentation
-
-- **LOOM Architecture**: `applications/loom/docs/LOOM_by_opus48.md`
-- **ADS+MCP**: `infrastructure/ads-mcp/docs/ADS+MCP_by_opus48.md`
-- **Hardware Debug**: `platforms/alchitry-platinum-v2/doc/HARDWARE-DEBUG-RULES.md`
-
----
-
-## 📄 License
-
-MIT License — See LICENSE file for details.
-
----
-
-*Built with coffee, J-Link, and an unreasonable amount of UART debugging.*
-*Woven on FPGA fabric by AI and human collaboration.*
+- [`platforms/alchitry-platinum-v2/`](platforms/alchitry-platinum-v2/README.md) — NeoRV32 on Pt V2 (codec, display, JTAG)
+- [`applications/loom/`](applications/loom/expanded/README.md) — LOOM audio design docs (not the capture path)
+- [`infrastructure/ads-mcp/`](infrastructure/ads-mcp/expanded/README.md) — ADS+MCP tooling
