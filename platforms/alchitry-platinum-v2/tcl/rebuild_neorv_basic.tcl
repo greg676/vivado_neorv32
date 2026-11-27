@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Greg Jackson
+# SPDX-License-Identifier: MIT
 # ── rebuild_neorv_basic.tcl ─────────────────────────────────────
 # Recreates the neorv_basic Vivado project from source files.
 # Usage: vivado -mode batch -source tcl/rebuild_neorv_basic.tcl

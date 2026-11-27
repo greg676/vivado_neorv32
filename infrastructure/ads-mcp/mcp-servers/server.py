@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Greg Jackson
+# SPDX-License-Identifier: MIT
 """
 hardware-debug-mcp — Safe hardware access via UART debug terminal.
 

@@ -114,4 +114,8 @@ Full details: [Wiki → Gotchas](../../wiki/Gotchas)
 
 **Active.** Bitstream v0.29, firmware debug-console rev0. MCP server v3 tested against live hardware.
 
-MIT License
+## License
+
+Original platform, firmware, PVLA, and LA files are **MIT** (`SPDX-License-Identifier: MIT`). See the repository [`LICENSE`](../../LICENSE).
+
+NeoRV32 is **BSD-3-Clause** and is **not rewritten** in this tree. See [`third_party/neorv32/LICENSE`](../../third_party/neorv32/LICENSE).

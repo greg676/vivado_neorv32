@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Greg Jackson
+// SPDX-License-Identifier: MIT
 // ================================================================================ //
 // hello_uart — First NeoRV32 Firmware
 //

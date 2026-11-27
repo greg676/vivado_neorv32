@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Greg Jackson
+# SPDX-License-Identifier: MIT
 MARCH = rv32im_zicsr_zifencei_zicond
 RISCV_PREFIX = ./tools/riscv32-unknown-elf-
 EFFORT = -Os

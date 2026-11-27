@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Greg Jackson
+// SPDX-License-Identifier: MIT
 // v29 — GPIO fix: separate INPUT vs OUTPUT register reads, correct pin map, LED blink
 // v28 — SPI commands added (W25Q64/ILI9341/XPT2046/SD)
 // v27 — 16-bit I2C writes for CS42448 (Arty-style init)

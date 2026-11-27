@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Greg Jackson
+# SPDX-License-Identifier: MIT
 # ── neorv_basic_plus.xdc ───────────────────────────────────────
 # Pinout & timing constraints for neorv_basic_plus block design
 #

@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Greg Jackson
+# SPDX-License-Identifier: MIT
 # flash-firmware.sh — Flash NeoRV32 firmware via J-Link
 # Usage: ./scripts/flash-firmware.sh [path/to/elf.bin]
 

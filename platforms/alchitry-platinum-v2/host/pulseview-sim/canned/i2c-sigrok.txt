@@ -1,0 +1,45 @@
+Samplerate: 200000000
+Channels: 8
+- SDA: logic
+- SCL: logic
+- D2: logic
+- D3: logic
+- D4: logic
+- D5: logic
+- D6: logic
+- D7: logic
+Logic unitsize: 1
+Logic sample count: 16750
+i2c-1: Start
+i2c-1: 0
+i2c-1: 0
+i2c-1: 0
+i2c-1: 0
+i2c-1: 0
+i2c-1: 1
+i2c-1: 0
+i2c-1: 1
+i2c-1: Write
+i2c-1: Address write: 50
+i2c-1: ACK
+i2c-1: 0
+i2c-1: 0
+i2c-1: 0
+i2c-1: 1
+i2c-1: 0
+i2c-1: 0
+i2c-1: 1
+i2c-1: 0
+i2c-1: Data write: 48
+i2c-1: ACK
+i2c-1: 1
+i2c-1: 0
+i2c-1: 0
+i2c-1: 1
+i2c-1: 0
+i2c-1: 1
+i2c-1: 1
+i2c-1: 0
+i2c-1: Data write: 69
+i2c-1: ACK
+i2c-1: Stop

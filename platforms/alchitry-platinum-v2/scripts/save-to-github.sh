@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Greg Jackson
+# SPDX-License-Identifier: MIT
 # save-to-github.sh — Formal commit workflow for Alchitry Pt V2 NeoRV32 project
 # Usage: ./scripts/save-to-github.sh "commit message"
 
