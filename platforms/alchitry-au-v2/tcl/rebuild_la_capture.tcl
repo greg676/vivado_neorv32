@@ -46,7 +46,10 @@ add_files -fileset constrs_1 [list \
 set_property used_in_synthesis false [get_files -quiet *au_ft601_impl.xdc]
 
 set_property top la_capture_top [current_fileset]
+set_property STEPS.PLACE_DESIGN.ARGS.DIRECTIVE ExtraTimingOpt [get_runs impl_1]
+set_property STEPS.ROUTE_DESIGN.ARGS.DIRECTIVE AggressiveExplore [get_runs impl_1]
 set_property STEPS.POST_ROUTE_PHYS_OPT_DESIGN.IS_ENABLED true [get_runs impl_1]
+set_property STEPS.POST_ROUTE_PHYS_OPT_DESIGN.ARGS.DIRECTIVE AggressiveExplore [get_runs impl_1]
 
 puts "Project created at $project_dir"
 puts "RAM program (not flash): openFPGALoader --fpga-part xc7a35tftg256 --write-sram <bit>"
