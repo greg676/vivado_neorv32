@@ -43,10 +43,15 @@ Ft+ stays on top. Bottom is the instrument. **SRAM / RAM bitstream only** — ne
 
 ## Where to start
 
+Clone **this snapshot** (tag `pvla`). A plain clone of `vivado_neorv32` is the SoC tree, not PVLA.
+
 ```bash
-git clone https://github.com/greg676/vivado_neorv32.git
-cd vivado_neorv32
+git clone --branch pvla --single-branch --depth 1 \
+    https://github.com/greg676/vivado_neorv32.git pvla
+cd pvla
 ```
+
+Zip: https://github.com/greg676/vivado_neorv32/archive/refs/tags/pvla.zip
 
 SRAM load (Au). Confirm `idcode` `0x362d093` / xc7a35 **every** reload:
 
