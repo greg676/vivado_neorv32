@@ -1,11 +1,29 @@
 # Alchitry Au V2 + Ft+ FT601 245 loopback
 
-Dedicated **32-bit 245 echo** for **Alchitry Au** (`xc7a35ticsg324-1`) and **Ft+ on TOP**.
-Published **V2** pinout from Alchitry `au_ft_plus.xdc`. Does **not** instantiate NeoRV32.
+Dedicated **32-bit 245** for **Alchitry Au** part **`xc7a35tftg256-1`** and **Ft+ on TOP**.
+Published **V2** pinout from Alchitry `au_ft_plus.xdc`. Does **not** instantiate NeoRV32. **No QSPI.**
 
-Do **not** load a Pt / `xc7a100t` bitstream onto this part.
+Do **not** use `xc7a35ticsg324-1`. Do **not** load a Pt / `xc7a100t` bitstream onto this part.
 
-## Build
+## Unzip → Vivado Tcl (capture)
+
+From the unzip/`pvla` tree, open a **Vivado Tcl shell** and:
+
+```tcl
+cd platforms/alchitry-au-v2
+source tcl/rebuild_la_capture.tcl
+```
+
+Part is `xc7a35tftg256-1` inside that script. Bitstream: `bitstreams/la_capture_top_v2.bit`. Then SRAM (never `--write-flash`):
+
+```bash
+openFPGALoader --fpga-part xc7a35tftg256 --write-sram bitstreams/la_capture_top_v2.bit
+make -C host/ft601-loopback d3xx D3XX_DIR=$HOME/ft601-host/d3xx/unpack/linux-arm-v8
+./host/ft601-loopback/ft601_loopback_d3xx --packed-counter --bytes 16777216 \
+    --chunk-bytes 262144 --nflight 4
+```
+
+## Build (loopback)
 
 ```bash
 cd platforms/alchitry-au-v2
