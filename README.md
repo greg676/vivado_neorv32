@@ -81,10 +81,10 @@ Ft+ stays on top. Bottom is the instrument. **SRAM / RAM bitstream only** — ne
 
 | Path | What |
 |---|---|
-| [`ip/pvla/`](ip/pvla/README.md) | Catalog IP `greg676:user:pvla:1.0` (BD GUI, 1–8 channels, Ft+ XDC scoped to the IP) |
-| [`platforms/alchitry-au-v2/`](platforms/alchitry-au-v2/README.md) | Proven Au PHY + 335 MiB/s capture |
-| [`platforms/alchitry-platinum-v2/`](platforms/alchitry-platinum-v2/README.md) | Pt loopback, sampler, optional MIG7 256 MB buffer |
-| [`host/`](host/) | Canonical Au libusb/D3XX loopback + capture (symlink to the Au platform host) |
+| [`ip/pvla/`](https://github.com/greg676/vivado_neorv32/tree/pvla/ip/pvla) | Catalog IP `greg676:user:pvla:1.0` (BD GUI, 1–8 channels, Ft+ XDC scoped to the IP) |
+| [`platforms/alchitry-au-v2/`](https://github.com/greg676/vivado_neorv32/tree/pvla/platforms/alchitry-au-v2) | Proven Au PHY + 335 MiB/s capture |
+| [`platforms/alchitry-platinum-v2/`](https://github.com/greg676/vivado_neorv32/tree/pvla/platforms/alchitry-platinum-v2) | Pt loopback, sampler, optional MIG7 256 MB buffer |
+| [`host/`](https://github.com/greg676/vivado_neorv32/tree/pvla/platforms/alchitry-au-v2/host) | Canonical Au libusb/D3XX loopback + capture (symlink to the Au platform host) |
 
 PVLA in Vivado: **Settings → IP → Repository →** `<unzip>/ip`, drop **PVLA**, 1–8 channels, `C_BOARD=AU_V2`.
 
